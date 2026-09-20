@@ -1,0 +1,47 @@
+# == my standard dependabot config ==
+
+version: 2
+
+updates:
+  # Rust Deps
+  - package-ecosystem: cargo
+    directory: "/"
+
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Australia/Brisbane
+
+    open-pull-requests-limit: 6
+
+    commit-message:
+      prefix: "deps"
+
+    groups:
+        cargo-minor-and-path:
+            applies-to: version-updates
+            patterns:
+              - "*"
+            update-types:
+                - minor
+                - patch
+
+  # Github action Deps 
+  - package-ecosystem: github-actions
+    directory: "/"
+
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:09"
+      timezone: Australia/Brisbane
+
+    commit-message:
+      prefix: "ci"
+
+    groups:
+      github-actions:
+          applies-to: version-updates
+          patterns:
+            - "*"

@@ -1,0 +1,66 @@
+name: Bug report
+description: Poke model, material, R3F component, accessibility, or package bug.
+title: "[BUG]: "
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary line
+      description: One sentence describing the bug.
+      placeholder: Glass smudges do not fade after pointer release.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version or commit
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      placeholder: React 19, Three 0.177, R3F 9, Chrome, Safari
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      placeholder: Describe the visible failure or build error.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      placeholder: What should have happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Render FeelableMaterialCard with material="glass".
+        2. Press and release at UV ...
+        3. See the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Link a short log if it helps. Do not upload credentials, paid assets, private keys, screenshots with secrets, or huge binaries.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      placeholder: |
+        - Fix is covered by a focused test.
+        - No React state is introduced in fast pointer/frame loops.
+    validations:
+      required: true

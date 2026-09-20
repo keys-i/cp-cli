@@ -1,0 +1,37 @@
+# == my standard template for feature ==
+name: Feature request
+description: Suggest reusable material interaction behaviour.
+title: "[FEATURE]: "
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: Add a low-power material response mode.
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Reusable use case
+      description: Explain why this belongs in the package rather than one website wrapper.
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: API sketch
+      placeholder: |
+        <FeelableSurface ... />
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - Covered by tests.
+        - Does not add a runtime dependency.
+        - Works with reduced motion.
+    validations:
+      required: true

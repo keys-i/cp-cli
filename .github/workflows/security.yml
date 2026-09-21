@@ -1,0 +1,286 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  merge_group:
+  workflow_dispatch:
+  schedule:
+    # Wednesday 02:41 in Australia/Brisbane (UTC+10, no daylight saving).
+    - cron: "41 16 * * 2"
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+
+jobs:
+  codeql:
+    name: CodeQL / ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: rust
+            build_mode: none
+          - language: actions
+            build_mode: none
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build_mode }}
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          fail-on-scopes: runtime, development
+          license-check: true
+          vulnerability-check: true
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 120
+          show-openssf-scorecard: true
+          warn-on-openssf-scorecard-level: 3
+          show-patched-versions: true
+
+  supply-chain:
+    name: Rust supply chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Install cargo-audit and cargo-deny
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
+        with:
+          tool: cargo-audit,cargo-deny
+          fallback: none
+
+      - name: Audit RustSec advisories
+        run: cargo audit --deny warnings
+
+      - name: Enforce dependency, license, and source policy
+        run: cargo deny check
+
+  workflow-syntax:
+    name: GitHub Actions syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          GOBIN="$RUNNER_TEMP/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
+
+      - name: Lint workflow files and embedded shell scripts
+        run: |
+          "$RUNNER_TEMP/bin/actionlint" -color
+
+  workflow-security:
+    name: GitHub Actions security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Audit workflows with zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          collect: all
+          online-audits: true
+          persona: auditor
+          min-severity: medium
+          min-confidence: medium
+          advanced-security: true
+
+  scorecard:
+    name: OpenSSF Scorecard
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'schedule') &&
+      github.event.repository.fork == false &&
+      (github.event.repository.visibility == 'public' || vars.ENABLE_PRIVATE_SCORECARD == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: read
+      issues: read
+      pull-requests: read
+      security-events: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run OpenSSF Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload Scorecard artifact
+        if: always() && hashFiles('results.sarif') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openssf-scorecard
+          path: results.sarif
+          if-no-files-found: error
+          retention-days: 5
+
+      - name: Upload Scorecard results to code scanning
+        if: always() && hashFiles('results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: results.sarif
+          category: openssf-scorecard
+
+  miri:
+    name: Undefined behaviour / Miri
+    if: >-
+      vars.ENABLE_MIRI == 'true' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install nightly Rust with Miri
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable action snapshot
+        with:
+          toolchain: nightly
+          components: miri
+
+      - name: Prepare Miri
+        run: cargo miri setup
+
+      - name: Run tests under Miri
+        run: cargo miri test --workspace --all-features
+
+  fuzz:
+    name: Fuzz targets
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect fuzz workspace
+        id: detect
+        run: |
+          if [[ -f fuzz/Cargo.toml ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "No fuzz/Cargo.toml found, skipping fuzz execution."
+          fi
+
+      - name: Install nightly Rust
+        if: steps.detect.outputs.enabled == 'true'
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable action snapshot
+        with:
+          toolchain: nightly
+
+      - name: Restore Rust cache
+        if: steps.detect.outputs.enabled == 'true'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: fuzz
+
+      - name: Install cargo-fuzz
+        if: steps.detect.outputs.enabled == 'true'
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Exercise every fuzz target
+        if: steps.detect.outputs.enabled == 'true'
+        run: |
+          mapfile -t targets < <(cargo fuzz list)
+
+          if [[ "${#targets[@]}" -eq 0 ]]; then
+            echo "fuzz/Cargo.toml exists but contains no fuzz targets." >&2
+            exit 1
+          fi
+
+          for target in "${targets[@]}"; do
+            echo "Running fuzz target: $target"
+            cargo fuzz run "$target" -- -max_total_time=60 -timeout=10
+          done
+
+      - name: Upload fuzz findings
+        if: always() && steps.detect.outputs.enabled == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-findings
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+          retention-days: 14

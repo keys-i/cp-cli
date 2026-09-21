@@ -1,0 +1,429 @@
+# -=- Optimised checks for Cargo -=-
+name: Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  merge_group:
+  workflow_dispatch:
+  schedule:
+    # Monday 02:17 in Australia/Brisbane (UTC+10, no daylight saving).
+    - cron: "17 16 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  RUST_BACKTRACE: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  metadata:
+    name: Repository metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      msrv: ${{ steps.manifest.outputs.msrv }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read MSRV from Cargo.toml
+        id: manifest
+        run: |
+          python3 <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          manifest = tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))
+          package = manifest.get("package", {})
+          workspace_package = manifest.get("workspace", {}).get("package", {})
+          msrv = package.get("rust-version") or workspace_package.get("rust-version") or ""
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"msrv={msrv}", file=output)
+          PY
+
+  quality:
+    name: Quality / ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - task: fmt
+            label: rustfmt
+          - task: check
+            label: cargo check
+          - task: clippy
+            label: clippy
+          - task: docs
+            label: rustdoc
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Restore Rust cache
+        if: matrix.task != 'fmt'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: quality-${{ matrix.task }}
+
+      - name: Check formatting
+        if: matrix.task == 'fmt'
+        run: cargo fmt --all -- --check
+
+      - name: Check all targets and features
+        if: matrix.task == 'check'
+        run: cargo check --workspace --all-targets --all-features --locked
+
+      - name: Run Clippy
+        if: matrix.task == 'clippy'
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Build documentation with warnings denied
+        if: matrix.task == 'docs'
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --all-features --no-deps --locked
+
+  tests:
+    name: Tests / ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux / default features
+            all_features: false
+          - os: ubuntu-latest
+            label: Linux / all features
+            all_features: true
+          - os: macos-latest
+            label: macOS / default features
+            all_features: false
+          - os: windows-latest
+            label: Windows / default features
+            all_features: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: tests-${{ matrix.os }}-${{ matrix.all_features }}
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
+        with:
+          tool: cargo-nextest
+          fallback: none
+
+      - name: Run tests with default features
+        if: matrix.all_features == false
+        run: cargo nextest run --workspace --all-targets --locked
+
+      - name: Run tests with all features
+        if: matrix.all_features == true
+        run: cargo nextest run --workspace --all-targets --all-features --locked
+
+  doctests:
+    name: Tests / doctests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: doctests
+
+      - name: Run documentation tests
+        run: cargo test --workspace --doc --all-features --locked
+
+  msrv:
+    name: Compatibility / MSRV ${{ needs.metadata.outputs.msrv }}
+    needs:
+      - metadata
+    if: needs.metadata.outputs.msrv != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable action snapshot
+        with:
+          toolchain: ${{ needs.metadata.outputs.msrv }}
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: msrv-${{ needs.metadata.outputs.msrv }}
+
+      - name: Check the declared minimum Rust version
+        run: cargo check --workspace --all-targets --locked
+
+  package:
+    name: Release readiness / cargo package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: package
+
+      - name: Verify publishable packages
+        run: cargo package --workspace --all-features --locked
+
+  coverage:
+    name: Tests / coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust and LLVM coverage tools
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: coverage
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
+        with:
+          tool: cargo-llvm-cov
+          fallback: none
+
+      - name: Generate LCOV coverage report
+        run: cargo llvm-cov --workspace --all-features --locked --lcov --output-path lcov.info
+
+      - name: Write coverage summary
+        run: cargo llvm-cov report --summary-only
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-lcov
+          path: lcov.info
+          if-no-files-found: error
+          retention-days: 14
+
+  bench-compile:
+    name: Benchmarks / compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: benchmarks-compile
+
+      - name: Compile benchmarks without running them
+        run: cargo bench --workspace --all-features --locked --no-run
+
+  benchmarks:
+    name: Benchmarks / execute
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: benchmarks-run
+
+      - name: Run benchmarks
+        run: |
+          set -o pipefail
+          cargo bench --workspace --all-features --locked 2>&1 | tee benchmark-output.txt
+
+      - name: Add benchmark output to the job summary
+        if: always()
+        run: |
+          if [[ -f benchmark-output.txt ]]; then
+            {
+              echo "## Benchmark output"
+              echo
+              echo '```text'
+              tail -n 200 benchmark-output.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-results
+          path: |
+            benchmark-output.txt
+            target/criterion
+          if-no-files-found: warn
+          retention-days: 30
+
+  feature-powerset:
+    name: Compatibility / feature powerset
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: feature-powerset
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
+        with:
+          tool: cargo-hack
+          fallback: none
+
+      - name: Check feature combinations
+        run: cargo hack check --workspace --feature-powerset --depth 2 --locked
+
+  required:
+    name: Required checks
+    if: always()
+    needs:
+      - metadata
+      - quality
+      - tests
+      - doctests
+      - msrv
+      - package
+      - coverage
+      - bench-compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify all required jobs
+        env:
+          METADATA_RESULT: ${{ needs.metadata.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          DOCTESTS_RESULT: ${{ needs.doctests.result }}
+          MSRV_RESULT: ${{ needs.msrv.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          BENCH_COMPILE_RESULT: ${{ needs['bench-compile'].result }}
+        run: |
+          required_results=(
+            "$METADATA_RESULT"
+            "$QUALITY_RESULT"
+            "$TESTS_RESULT"
+            "$DOCTESTS_RESULT"
+            "$PACKAGE_RESULT"
+            "$COVERAGE_RESULT"
+            "$BENCH_COMPILE_RESULT"
+          )
+
+          for result in "${required_results[@]}"; do
+            if [[ "$result" != "success" ]]; then
+              echo "A required job finished with result: $result" >&2
+              exit 1
+            fi
+          done
+
+          if [[ "$MSRV_RESULT" != "success" && "$MSRV_RESULT" != "skipped" ]]; then
+            echo "The MSRV job finished with result: $MSRV_RESULT" >&2
+            exit 1
+          fi

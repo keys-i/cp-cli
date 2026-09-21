@@ -1,14 +1,21 @@
 use std::time::Duration;
 
 use reqwest::{Client as HttpClient, ClientBuilder, redirect::Policy};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{Error, Problem};
+use crate::{Difficulty, Error, Problem, ProblemSummary, SearchResults};
 
 pub(crate) const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 const QUERY: &str = "query questionData($titleSlug: String!) {
     question(titleSlug: $titleSlug) { titleSlug title content isPaidOnly }
 }";
+const SEARCH_QUERY: &str = "query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
+    problemsetQuestionList: questionList(categorySlug: $categorySlug, limit: $limit, skip: $skip, filters: $filters) {
+        total: totalNum
+        questions: data { frontendQuestionId: questionFrontendId title titleSlug difficulty isPaidOnly }
+    }
+}";
+const SEARCH_LIMIT: u32 = 20;
 
 pub struct Client {
     pub(crate) http: HttpClient,
@@ -29,33 +36,20 @@ impl Client {
         slug: &str,
         progress: impl FnMut(usize, Option<u64>),
     ) -> Result<Problem, Error> {
-        if slug.is_empty()
-            || slug.len() > 128
-            || !slug
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-        {
+        if !valid_slug(slug) {
             return Err(Error::InvalidSlug);
         }
 
-        let response = self
-            .http
-            .post(self.endpoint.as_ref())
-            .header(reqwest::header::REFERER, "https://leetcode.com/")
-            .header(reqwest::header::ORIGIN, "https://leetcode.com")
-            .json(&ProblemRequest {
-                query: QUERY,
-                operation_name: "questionData",
-                variables: Variables { title_slug: slug },
-            })
-            .send()
+        let response: ProblemResponse = self
+            .graphql(
+                &ProblemRequest {
+                    query: QUERY,
+                    operation_name: "questionData",
+                    variables: Variables { title_slug: slug },
+                },
+                progress,
+            )
             .await?;
-
-        if !response.status().is_success() {
-            return Err(Error::Status(response.status()));
-        }
-
-        let response = read_response(response, progress).await?;
         if !response.errors.is_empty() {
             return Err(Error::Graphql);
         }
@@ -82,6 +76,101 @@ impl Client {
             statement,
         })
     }
+
+    /// Search public problems by title keywords, without authentication
+    pub async fn search(
+        &self,
+        query: &str,
+        progress: impl FnMut(usize, Option<u64>),
+    ) -> Result<SearchResults, Error> {
+        let query = query.trim();
+        if query.is_empty()
+            || query.len() > 100
+            || !query
+                .bytes()
+                .all(|byte| byte.is_ascii_graphic() || byte == b' ')
+        {
+            return Err(Error::InvalidQuery);
+        }
+
+        let response: SearchResponse = self
+            .graphql(
+                &SearchRequest {
+                    query: SEARCH_QUERY,
+                    operation_name: "problemsetQuestionList",
+                    variables: SearchVariables {
+                        category_slug: "",
+                        limit: SEARCH_LIMIT,
+                        skip: 0,
+                        filters: SearchFilters {
+                            search_keywords: query,
+                        },
+                    },
+                },
+                progress,
+            )
+            .await?;
+        if !response.errors.is_empty() {
+            return Err(Error::Graphql);
+        }
+        let list = response
+            .data
+            .ok_or(Error::InvalidResponse)?
+            .problemset_question_list;
+        if list.questions.len() > SEARCH_LIMIT as usize || list.total < list.questions.len() as u32
+        {
+            return Err(Error::InvalidResponse);
+        }
+
+        let mut problems = Vec::with_capacity(list.questions.len());
+        for question in list.questions {
+            let number = question
+                .frontend_question_id
+                .parse()
+                .ok()
+                .filter(|number: &u32| *number > 0)
+                .ok_or(Error::InvalidResponse)?;
+            if !valid_slug(&question.title_slug) || !valid_label(&question.title, 256) {
+                return Err(Error::InvalidResponse);
+            }
+            let difficulty = match question.difficulty {
+                SearchDifficulty::Easy => Difficulty::Easy,
+                SearchDifficulty::Medium => Difficulty::Medium,
+                SearchDifficulty::Hard => Difficulty::Hard,
+                SearchDifficulty::Unknown => return Err(Error::InvalidResponse),
+            };
+            problems.push(ProblemSummary {
+                number,
+                id: question.title_slug,
+                title: question.title,
+                difficulty,
+                paid_only: question.is_paid_only,
+            });
+        }
+        Ok(SearchResults {
+            total: list.total,
+            problems,
+        })
+    }
+
+    async fn graphql<T: DeserializeOwned>(
+        &self,
+        request: &impl Serialize,
+        progress: impl FnMut(usize, Option<u64>),
+    ) -> Result<T, Error> {
+        let response = self
+            .http
+            .post(self.endpoint.as_ref())
+            .header(reqwest::header::REFERER, "https://leetcode.com/")
+            .header(reqwest::header::ORIGIN, "https://leetcode.com")
+            .json(request)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(Error::Status(response.status()));
+        }
+        read_response(response, progress).await
+    }
 }
 
 pub(crate) fn http_builder() -> ClientBuilder {
@@ -104,10 +193,10 @@ pub(crate) fn http_builder() -> ClientBuilder {
         ))
 }
 
-async fn read_response(
+async fn read_response<T: DeserializeOwned>(
     mut response: reqwest::Response,
     mut progress: impl FnMut(usize, Option<u64>),
-) -> Result<ProblemResponse, Error> {
+) -> Result<T, Error> {
     if response
         .content_length()
         .is_some_and(|length| length > MAX_RESPONSE_BYTES as u64)
@@ -146,6 +235,29 @@ struct Variables<'a> {
     title_slug: &'a str,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchRequest<'a> {
+    query: &'static str,
+    operation_name: &'static str,
+    variables: SearchVariables<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchVariables<'a> {
+    category_slug: &'static str,
+    limit: u32,
+    skip: u32,
+    filters: SearchFilters<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchFilters<'a> {
+    search_keywords: &'a str,
+}
+
 #[derive(Deserialize)]
 struct ProblemResponse {
     data: Option<ProblemData>,
@@ -166,4 +278,57 @@ struct Question {
     title: Box<str>,
     content: Option<Box<str>>,
     is_paid_only: bool,
+}
+
+#[derive(Deserialize)]
+struct SearchResponse {
+    data: Option<SearchData>,
+    #[serde(default)]
+    errors: Vec<serde::de::IgnoredAny>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchData {
+    problemset_question_list: SearchList,
+}
+
+#[derive(Deserialize)]
+struct SearchList {
+    total: u32,
+    questions: Vec<SearchQuestion>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchQuestion {
+    frontend_question_id: Box<str>,
+    title: Box<str>,
+    title_slug: Box<str>,
+    difficulty: SearchDifficulty,
+    is_paid_only: bool,
+}
+
+#[derive(Deserialize)]
+enum SearchDifficulty {
+    Easy,
+    Medium,
+    Hard,
+    #[serde(other)]
+    Unknown,
+}
+
+fn valid_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug.len() <= 128
+        && slug
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn valid_label(value: &str, limit: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= limit
+        && value == value.trim()
+        && !value.chars().any(char::is_control)
 }

@@ -2,6 +2,8 @@
 pub enum Error {
     #[error("invalid LeetCode problem slug")]
     InvalidSlug,
+    #[error("search query must contain 1 to 100 printable ASCII characters")]
+    InvalidQuery,
     #[error("could not complete the LeetCode request; check your connection and try again")]
     Transport(#[from] reqwest::Error),
     #[error("LeetCode returned HTTP {0}")]

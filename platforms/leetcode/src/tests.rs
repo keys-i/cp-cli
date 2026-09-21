@@ -1,4 +1,4 @@
-use std::{io, time::Duration};
+use std::{future::Future, io, pin::Pin, time::Duration};
 
 use serde_json::{Value, json};
 use tokio::{
@@ -8,7 +8,7 @@ use tokio::{
 };
 
 use crate::{
-    Client, Error, Problem,
+    Client, Difficulty, Error, Problem,
     client::{MAX_RESPONSE_BYTES, http_builder},
 };
 
@@ -42,7 +42,12 @@ fn has_failure(result: &Result<Problem, Error>, expected: Failure) -> bool {
     )
 }
 
-async fn exchange(response: String) -> TestResult<(Result<Problem, Error>, Value, Progress)> {
+type RequestFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + 'a>>;
+
+async fn exchange<T>(
+    response: String,
+    operation: impl for<'a> FnOnce(&'a Client, &'a mut Progress) -> RequestFuture<'a, T>,
+) -> TestResult<(Result<T, Error>, Value, Progress)> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let client = Client {
         http: http_builder()
@@ -98,10 +103,7 @@ async fn exchange(response: String) -> TestResult<(Result<Problem, Error>, Value
     };
     let mut progress = Vec::new();
     let (result, request) = timeout(Duration::from_secs(3), async {
-        tokio::join!(
-            client.problem("two-sum", |bytes, total| progress.push((bytes, total))),
-            server
-        )
+        tokio::join!(operation(&client, &mut progress), server)
     })
     .await?;
     Ok((result, request?, progress))
@@ -109,10 +111,13 @@ async fn exchange(response: String) -> TestResult<(Result<Problem, Error>, Value
 
 async fn query(body: Value) -> TestResult<Result<Problem, Error>> {
     let body = body.to_string();
-    Ok(exchange(format!(
-        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
-        body.len()
-    ))
+    Ok(exchange(
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        ),
+        |client, _| Box::pin(client.problem("two-sum", |_, _| {})),
+    )
     .await?
     .0)
 }
@@ -121,9 +126,12 @@ async fn query(body: Value) -> TestResult<Result<Problem, Error>> {
 async fn client_contract() -> TestResult {
     let body = problem_body().to_string();
     let length = body.len();
-    let (result, request, progress) = exchange(format!(
-        "HTTP/1.1 200 OK\r\nContent-Length: {length}\r\n\r\n{body}"
-    ))
+    let (result, request, progress) = exchange(
+        format!("HTTP/1.1 200 OK\r\nContent-Length: {length}\r\n\r\n{body}"),
+        |client, progress| {
+            Box::pin(client.problem("two-sum", |bytes, total| progress.push((bytes, total))))
+        },
+    )
     .await?;
     let problem = result?;
     assert_eq!(problem.id.as_ref(), "two-sum");
@@ -138,6 +146,60 @@ async fn client_contract() -> TestResult {
     assert_eq!(progress.first(), Some(&(0, Some(length as u64))));
     assert_eq!(progress.last(), Some(&(length, Some(length as u64))));
     assert!(progress.windows(2).all(|pair| pair[0].0 <= pair[1].0));
+
+    let search_body = json!({"data": {"problemsetQuestionList": {
+        "total": 2,
+        "questions": [
+            {"frontendQuestionId": "1", "title": "Two Sum", "titleSlug": "two-sum", "difficulty": "Easy", "isPaidOnly": false},
+            {"frontendQuestionId": "2", "title": "Add Two Numbers", "titleSlug": "add-two-numbers", "difficulty": "Medium", "isPaidOnly": true}
+        ]
+    }}})
+    .to_string();
+    let search_length = search_body.len();
+    let (result, request, progress) = exchange(
+        format!("HTTP/1.1 200 OK\r\nContent-Length: {search_length}\r\n\r\n{search_body}"),
+        |client, progress| {
+            Box::pin(client.search("  two sum  ", |bytes, total| progress.push((bytes, total))))
+        },
+    )
+    .await?;
+    let search = result?;
+    assert_eq!(search.total, 2);
+    assert_eq!(
+        search.problems,
+        vec![
+            crate::ProblemSummary {
+                number: 1,
+                id: "two-sum".into(),
+                title: "Two Sum".into(),
+                difficulty: Difficulty::Easy,
+                paid_only: false,
+            },
+            crate::ProblemSummary {
+                number: 2,
+                id: "add-two-numbers".into(),
+                title: "Add Two Numbers".into(),
+                difficulty: Difficulty::Medium,
+                paid_only: true,
+            },
+        ]
+    );
+    assert_eq!(request["operationName"], "problemsetQuestionList");
+    assert_eq!(
+        request["variables"],
+        json!({"categorySlug": "", "skip": 0, "limit": 20, "filters": {"searchKeywords": "two sum"}})
+    );
+    assert!(request["query"].as_str().is_some_and(|query| {
+        query.contains("problemsetQuestionList: questionList")
+            && query.contains("total: totalNum")
+            && query.contains("questions: data")
+            && query.contains("frontendQuestionId: questionFrontendId")
+    }));
+    assert_eq!(progress.first(), Some(&(0, Some(search_length as u64))));
+    assert_eq!(
+        progress.last(),
+        Some(&(search_length, Some(search_length as u64)))
+    );
 
     let mut graphql = problem_body();
     graphql["errors"] = json!([{"message": "sensitive server detail"}]);
@@ -198,46 +260,122 @@ async fn client_contract() -> TestResult {
             Err(Error::InvalidSlug)
         ));
     }
+    for query in ["", " \t ", "two\nsum", "café", &"a".repeat(101)] {
+        assert!(matches!(
+            client.search(query, |_, _| {}).await,
+            Err(Error::InvalidQuery)
+        ));
+    }
+
+    for (field, value) in [
+        ("frontendQuestionId", json!("0")),
+        ("frontendQuestionId", json!("one")),
+        ("title", json!(" ")),
+        ("title", json!("Two\nSum")),
+        ("title", json!(" Two Sum")),
+        ("titleSlug", json!("two sum")),
+        ("difficulty", json!("Unknown")),
+    ] {
+        let body = json!({"data": {"problemsetQuestionList": {
+            "total": 1,
+            "questions": [{
+                "frontendQuestionId": "1", "title": "Two Sum", "titleSlug": "two-sum",
+                "difficulty": "Hard", "isPaidOnly": false
+            }]
+        }}});
+        let mut body = body;
+        body["data"]["problemsetQuestionList"]["questions"][0][field] = value;
+        let body = body.to_string();
+        let (result, _, _) = exchange(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            ),
+            |client, _| Box::pin(client.search("two", |_, _| {})),
+        )
+        .await?;
+        assert!(
+            matches!(result, Err(Error::InvalidResponse)),
+            "field={field}"
+        );
+    }
+    let body = json!({"data": {"problemsetQuestionList": {"total": 0, "questions": [{
+        "frontendQuestionId": "1", "title": "Two Sum", "titleSlug": "two-sum",
+        "difficulty": "Easy", "isPaidOnly": false
+    }]}}})
+    .to_string();
+    let (result, _, _) = exchange(
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        ),
+        |client, _| Box::pin(client.search("two", |_, _| {})),
+    )
+    .await?;
+    assert!(matches!(result, Err(Error::InvalidResponse)));
 
     for status in [
         300, 301, 302, 307, 308, 400, 401, 403, 404, 408, 429, 500, 503,
     ] {
-        let (result, _, progress) = exchange(format!(
-            "HTTP/1.1 {status} Test\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\n\r\n"
-        ))
+        let (result, _, progress) = exchange(
+            format!(
+                "HTTP/1.1 {status} Test\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\n\r\n"
+            ),
+            |client, _| Box::pin(client.problem("two-sum", |_, _| {})),
+        )
         .await?;
         assert!(matches!(result, Err(Error::Status(code)) if code.as_u16() == status));
         assert!(progress.is_empty());
     }
-    let (result, _, progress) =
-        exchange("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nnope".into()).await?;
+    let (result, _, progress) = exchange(
+        "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nnope".into(),
+        |client, progress| {
+            Box::pin(client.problem("two-sum", |bytes, total| progress.push((bytes, total))))
+        },
+    )
+    .await?;
     assert!(matches!(result, Err(Error::Decode(_))));
     assert_eq!(progress, [(0, Some(4)), (4, Some(4))]);
 
-    let (result, _, progress) = exchange(format!(
-        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
-        MAX_RESPONSE_BYTES + 1
-    ))
+    let (result, _, progress) = exchange(
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            MAX_RESPONSE_BYTES + 1
+        ),
+        |client, progress| {
+            Box::pin(client.problem("two-sum", |bytes, total| progress.push((bytes, total))))
+        },
+    )
     .await?;
     assert!(matches!(result, Err(Error::ResponseTooLarge { .. })));
     assert!(progress.is_empty());
 
     let mut body = problem_body().to_string();
     body.push_str(&" ".repeat(MAX_RESPONSE_BYTES - body.len()));
-    let (result, _, progress) = exchange(format!(
-        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
-        body.len()
-    ))
+    let (result, _, progress) = exchange(
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        ),
+        |client, progress| {
+            Box::pin(client.problem("two-sum", |bytes, total| progress.push((bytes, total))))
+        },
+    )
     .await?;
     assert!(result.is_ok());
     assert_eq!(
         progress.last(),
         Some(&(MAX_RESPONSE_BYTES, Some(MAX_RESPONSE_BYTES as u64)))
     );
-    let (result, _, progress) = exchange(format!(
-        "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n{:x}\r\n{body}\r\n1\r\n \r\n0\r\n\r\n",
-        body.len()
-    ))
+    let (result, _, progress) = exchange(
+        format!(
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n{:x}\r\n{body}\r\n1\r\n \r\n0\r\n\r\n",
+            body.len()
+        ),
+        |client, progress| {
+            Box::pin(client.problem("two-sum", |bytes, total| progress.push((bytes, total))))
+        },
+    )
     .await?;
     assert!(matches!(result, Err(Error::ResponseTooLarge { .. })));
     assert_eq!(progress.first(), Some(&(0, None)));

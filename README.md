@@ -19,11 +19,12 @@
 
 ## Overview
 
-`cp-cli` is a Rust CLI for reading public LeetCode problems from the terminal.
+`cp-cli` is a Rust CLI for finding and reading public LeetCode problems from the terminal.
 
 ## Features
 
 - Fetch a problem by its title slug
+- Search public problems by title or number without downloading the full catalogue
 - Read styled Markdown, highlighted code, tables and selectable LaTeX equations inside the terminal
 - Automatically enlarge titles in Apple Terminal and Windows Terminal
 - A responsive raster-glyph possum HUD and honest animated transfer progress
@@ -44,6 +45,7 @@ cargo build --release --locked
 ## Quick Start
 
 ```sh
+cargo run --locked -- problem search "two sum"
 cargo run --locked -- problem show two-sum
 cargo run --locked -- --theme arcade problem show two-sum
 cargo run --locked -- problem show two-sum --heading-size large
@@ -55,9 +57,16 @@ cargo run --locked -- --platform leetcode --format json problem show two-sum
 `cp-cli problem show <SLUG>` prints a problem's title and statement. Use
 `--format text` (the default) or `--format json`; `--platform leetcode` is optional.
 
-Use the slug from the problem URL, such as `two-sum`. Numeric problem-number
-lookup and full URLs are not supported. Slugs accept 1–128 ASCII letters,
-digits, hyphens or underscores.
+`cp-cli problem search <QUERY>` shows the first 20 matching problems in a
+responsive table. Number and name use contrasting theme colours, linked slugs
+are underlined, and Easy, Medium and Hard remain readable colour-coded badges.
+Premium results are marked. Quote queries containing spaces, such as
+`problem search "binary tree"`. The total match count makes truncation explicit;
+refine the query to narrow a longer result set.
+
+For `problem show`, use the slug from the problem URL, such as `two-sum`.
+Numeric problem-number lookup and full URLs are not accepted by that command.
+Slugs accept 1–128 ASCII letters, digits, hyphens or underscores.
 
 ### Terminal appearance
 
@@ -138,9 +147,10 @@ characters.
 Use `--help`, `problem --help` or `problem show --help`; there is no `help`
 subcommand.
 
-JSON output contains `id` (the slug), `title` and `statement` (HTML). Diagnostics
-go to stderr. Invalid arguments exit with status 2; request and output failures
-exit with status 1. Closing an output pipe early exits successfully.
+Problem JSON contains `id` (the slug), `title` and `statement` (HTML). Search JSON
+contains `query`, `total` and compact `results`. Diagnostics go to stderr. Invalid
+arguments exit with status 2; request and output failures exit with status 1.
+Closing an output pipe early exits successfully.
 
 ### Authentication
 

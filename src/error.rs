@@ -4,6 +4,8 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("invalid problem slug: use 1–128 ASCII letters, digits, hyphens or underscores")]
     InvalidProblemId,
+    #[error("invalid search query: use 1–100 printable ASCII characters")]
+    InvalidSearchQuery,
     #[cfg(not(feature = "leetcode"))]
     #[error("LeetCode support is disabled; rebuild with --features leetcode")]
     LeetCodeDisabled,

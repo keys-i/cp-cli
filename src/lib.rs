@@ -17,10 +17,18 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 pub use error::Error;
 
+enum Content {
+    Problem(domain::Problem),
+    Search(domain::ProblemSearch),
+}
+
 pub async fn run() -> Result<(), Error> {
     let cli = cli::Cli::parse();
     let cli::Command::Problem { command } = cli.command;
-    let cli::ProblemCommand::Show { id } = command;
+    let activity = match &command {
+        cli::ProblemCommand::Show { id } => format!("Opening {}", id.as_ref()),
+        cli::ProblemCommand::Search { query } => format!("Searching {}", query.as_ref()),
+    };
     let mut presentation = output::Presentation::detect(cli.color, cli.heading_size);
     presentation.motion = !cli.no_animation;
     let terminal = std::io::stdout().is_terminal()
@@ -57,7 +65,7 @@ pub async fn run() -> Result<(), Error> {
     let progress = if terminal && std::io::stderr().is_terminal() {
         let progress = ProgressBar::new_spinner();
         progress.set_style(spinner_style);
-        progress.set_message(format!("Opening {}", id.as_ref()));
+        progress.set_message(activity);
         if !cli.no_animation {
             progress.enable_steady_tick(Duration::from_millis(260));
         } else {
@@ -67,38 +75,61 @@ pub async fn run() -> Result<(), Error> {
     } else {
         None
     };
-    let result = match cli.platform {
-        cli::Platform::LeetCode => {
+    let result = match (cli.platform, command) {
+        (cli::Platform::LeetCode, cli::ProblemCommand::Show { id }) => {
             problems::show(&id, |bytes, total| {
-                if let Some(progress) = &progress {
-                    if let Some(total) = total.filter(|total| *total > 0)
-                        && progress.length().is_none()
-                    {
-                        progress.disable_steady_tick();
-                        progress.set_style(bar_style.clone());
-                        progress.set_length(total);
-                    }
-                    progress.set_position(bytes as u64);
-                }
+                update_progress(&progress, &bar_style, bytes, total)
             })
             .await
+            .map(Content::Problem)
+        }
+        (cli::Platform::LeetCode, cli::ProblemCommand::Search { query }) => {
+            problems::search(query, |bytes, total| {
+                update_progress(&progress, &bar_style, bytes, total)
+            })
+            .await
+            .map(Content::Search)
         }
     };
     if let Some(progress) = progress {
         progress.finish_and_clear();
     }
-    let problem = result?;
+    let content = result?;
     let color = if presentation.color || presentation.large_heading {
         anstream::ColorChoice::AlwaysAnsi
     } else {
         anstream::ColorChoice::Never
     };
     let stdout = anstream::AutoStream::new(std::io::stdout(), color);
-    output::problem(stdout.lock(), cli.format, &problem, presentation)?;
+    let mut stdout = stdout.lock();
+    match content {
+        Content::Problem(problem) => {
+            output::problem(&mut stdout, cli.format, &problem, presentation)
+        }
+        Content::Search(search) => output::search(&mut stdout, cli.format, &search, presentation),
+    }?;
     if cli.sound && terminal && std::io::stderr().is_terminal() {
         std::io::stderr().lock().write_all(b"\x07")?;
     }
     Ok(())
+}
+
+fn update_progress(
+    progress: &Option<ProgressBar>,
+    bar_style: &ProgressStyle,
+    bytes: usize,
+    total: Option<u64>,
+) {
+    if let Some(progress) = progress {
+        if let Some(total) = total.filter(|total| *total > 0)
+            && progress.length().is_none()
+        {
+            progress.disable_steady_tick();
+            progress.set_style(bar_style.clone());
+            progress.set_length(total);
+        }
+        progress.set_position(bytes as u64);
+    }
 }
 
 #[cfg(test)]

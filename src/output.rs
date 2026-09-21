@@ -15,7 +15,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     cli::{Color, Format, HeadingSize},
-    domain::Problem,
+    domain::{Problem, ProblemSearch},
     error::Result,
     math,
 };
@@ -114,6 +114,311 @@ pub(crate) fn problem(
     hud(&mut output, problem.id.as_ref(), presentation)?;
     heading(&mut output, &problem.title, presentation)?;
     statement(&mut output, problem, presentation)
+}
+
+pub(crate) fn search(
+    mut output: impl Write,
+    format: Format,
+    search: &ProblemSearch,
+    presentation: Presentation,
+) -> Result<()> {
+    if matches!(format, Format::Json) {
+        serde_json::to_writer(&mut output, search)?;
+        writeln!(output)?;
+        return Ok(());
+    }
+
+    let shown = search.results.len();
+    let count = if search.total == 1 {
+        "1 match".to_owned()
+    } else if search.total > shown as u32 {
+        format!("{shown} of {} matches", search.total)
+    } else {
+        format!("{} matches", search.total)
+    };
+    let accent = presentation.accent();
+    let reset = accent.render_reset();
+    let columns = usize::from(presentation.columns);
+    for line in textwrap::wrap(&format!("POSSUM//SCAN  {count}"), columns) {
+        writeln!(output, "{accent}{line}{reset}")?;
+    }
+    for line in textwrap::wrap(&format!("Search: {}", search.query.as_ref()), columns) {
+        writeln!(output, "{line}")?;
+    }
+
+    if search.results.is_empty() {
+        writeln!(output)?;
+        for line in textwrap::wrap(
+            "No problems found. Try a shorter title or problem number.",
+            columns,
+        ) {
+            writeln!(output, "{line}")?;
+        }
+        return Ok(());
+    }
+
+    writeln!(output)?;
+    if columns >= 48 {
+        search_table(&mut output, search, presentation)?;
+    } else {
+        search_compact(&mut output, search, presentation)?;
+    }
+
+    if search.total > shown as u32 {
+        writeln!(output)?;
+        let remaining = search.total - shown as u32;
+        for line in textwrap::wrap(
+            &format!("{remaining} more matches — refine your search to narrow the list."),
+            columns,
+        ) {
+            writeln!(output, "{line}")?;
+        }
+    }
+    Ok(())
+}
+
+fn search_table(
+    output: &mut impl Write,
+    search: &ProblemSearch,
+    presentation: Presentation,
+) -> std::io::Result<()> {
+    let columns = usize::from(presentation.columns);
+    let number_width = search
+        .results
+        .iter()
+        .map(|problem| problem.number.to_string().width())
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let level_width = 8;
+    let content_width = columns - number_width - level_width - 9;
+    let title_width = (content_width * 2 / 5).max(10);
+    let slug_width = content_width - title_width;
+    let number_style = search_bold(presentation, presentation.palette.result_number);
+    let title_style = search_bold(presentation, presentation.palette.result_title);
+    let slug_style = search_link_style(presentation, presentation.palette.result_slug);
+    let rule_style = search_style(presentation, presentation.palette.shadow);
+
+    write_cell(output, "#", number_width, number_style)?;
+    write_divider(output, rule_style)?;
+    write_cell(output, "PROBLEM", title_width, title_style)?;
+    write_divider(output, rule_style)?;
+    write_cell(output, "LEVEL", level_width, presentation.accent())?;
+    write_divider(output, rule_style)?;
+    write_styled(output, "SLUG", slug_style, None, false)?;
+    writeln!(output)?;
+
+    let rule = format!(
+        "{}─┼─{}─┼─{}─┼─{}",
+        "─".repeat(number_width),
+        "─".repeat(title_width),
+        "─".repeat(level_width),
+        "─".repeat(slug_width),
+    );
+    writeln!(output, "{rule_style}{rule}{}", rule_style.render_reset())?;
+
+    for problem in &search.results {
+        let number = problem.number.to_string();
+        let title = clean(problem.title.as_ref());
+        let badge = format!("[{:^6}]", problem.difficulty.label());
+        let slug = format!(
+            "leetcode/{}{}",
+            problem.id.as_ref(),
+            if problem.paid_only { " · PREMIUM" } else { "" }
+        );
+        let title_lines = textwrap::wrap(&title, title_width);
+        let slug_lines = textwrap::wrap(&slug, slug_width);
+        let row_height = title_lines.len().max(slug_lines.len());
+        let level_style = difficulty_style(&problem.difficulty, presentation);
+
+        for row in 0..row_height {
+            write_cell(
+                output,
+                if row == 0 { &number } else { "" },
+                number_width,
+                number_style,
+            )?;
+            write_divider(output, rule_style)?;
+            write_cell(
+                output,
+                title_lines.get(row).map_or("", AsRef::as_ref),
+                title_width,
+                title_style,
+            )?;
+            write_divider(output, rule_style)?;
+            write_cell(
+                output,
+                if row == 0 { &badge } else { "" },
+                level_width,
+                level_style,
+            )?;
+            write_divider(output, rule_style)?;
+            write_styled(
+                output,
+                slug_lines.get(row).map_or("", AsRef::as_ref),
+                slug_style,
+                Some(problem.id.as_ref()),
+                presentation.color && presentation.interactive,
+            )?;
+            writeln!(output)?;
+        }
+    }
+    Ok(())
+}
+
+fn search_compact(
+    output: &mut impl Write,
+    search: &ProblemSearch,
+    presentation: Presentation,
+) -> std::io::Result<()> {
+    let columns = usize::from(presentation.columns);
+    let number_style = search_bold(presentation, presentation.palette.result_number);
+    let title_style = search_bold(presentation, presentation.palette.result_title);
+    let slug_style = search_link_style(presentation, presentation.palette.result_slug);
+
+    for problem in &search.results {
+        let number = problem.number.to_string();
+        let title = clean(problem.title.as_ref());
+        let title_indent = number.width() + 2;
+        if title_indent < columns {
+            write_styled(output, &number, number_style, None, false)?;
+            write!(output, "  ")?;
+            for (row, line) in textwrap::wrap(&title, columns - title_indent)
+                .into_iter()
+                .enumerate()
+            {
+                if row > 0 {
+                    write!(output, "{}", " ".repeat(title_indent))?;
+                }
+                write_styled(output, &line, title_style, None, false)?;
+                writeln!(output)?;
+            }
+        } else {
+            for line in textwrap::wrap(&number, columns) {
+                writeln!(
+                    output,
+                    "{number_style}{line}{}",
+                    number_style.render_reset()
+                )?;
+            }
+            for line in textwrap::wrap(&title, columns) {
+                writeln!(output, "{title_style}{line}{}", title_style.render_reset())?;
+            }
+        }
+
+        let badge = format!("[{:^6}]", problem.difficulty.label());
+        let level_style = difficulty_style(&problem.difficulty, presentation);
+        let slug = format!(
+            "leetcode/{}{}",
+            problem.id.as_ref(),
+            if problem.paid_only { " · PREMIUM" } else { "" }
+        );
+        let detail_indent = badge.width() + 2;
+        if detail_indent < columns {
+            write_styled(output, &badge, level_style, None, false)?;
+            write!(output, "  ")?;
+            for (row, line) in textwrap::wrap(&slug, columns - detail_indent)
+                .into_iter()
+                .enumerate()
+            {
+                if row > 0 {
+                    write!(output, "{}", " ".repeat(detail_indent))?;
+                }
+                write_styled(
+                    output,
+                    &line,
+                    slug_style,
+                    Some(problem.id.as_ref()),
+                    presentation.color && presentation.interactive,
+                )?;
+                writeln!(output)?;
+            }
+        } else {
+            for line in textwrap::wrap(&badge, columns) {
+                writeln!(output, "{level_style}{line}{}", level_style.render_reset())?;
+            }
+            for line in textwrap::wrap(&slug, columns) {
+                write_styled(
+                    output,
+                    &line,
+                    slug_style,
+                    Some(problem.id.as_ref()),
+                    presentation.color && presentation.interactive,
+                )?;
+                writeln!(output)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn search_style(presentation: Presentation, color: u8) -> anstyle::Style {
+    if presentation.color {
+        crate::theme::foreground(color)
+    } else {
+        anstyle::Style::new()
+    }
+}
+
+fn search_bold(presentation: Presentation, color: u8) -> anstyle::Style {
+    if presentation.color {
+        crate::theme::foreground(color).bold()
+    } else {
+        anstyle::Style::new()
+    }
+}
+
+fn search_link_style(presentation: Presentation, color: u8) -> anstyle::Style {
+    if presentation.color {
+        crate::theme::foreground(color).underline()
+    } else {
+        anstyle::Style::new()
+    }
+}
+
+fn difficulty_style(
+    difficulty: &crate::domain::Difficulty,
+    presentation: Presentation,
+) -> anstyle::Style {
+    let color = match difficulty {
+        crate::domain::Difficulty::Easy => presentation.palette.easy,
+        crate::domain::Difficulty::Medium => presentation.palette.medium,
+        crate::domain::Difficulty::Hard => presentation.palette.hard,
+    };
+    search_bold(presentation, color)
+}
+
+fn write_cell(
+    output: &mut impl Write,
+    text: &str,
+    width: usize,
+    style: anstyle::Style,
+) -> std::io::Result<()> {
+    write_styled(output, text, style, None, false)?;
+    write!(output, "{}", " ".repeat(width.saturating_sub(text.width())))
+}
+
+fn write_divider(output: &mut impl Write, style: anstyle::Style) -> std::io::Result<()> {
+    write!(output, " {style}│{} ", style.render_reset())
+}
+
+fn write_styled(
+    output: &mut impl Write,
+    text: &str,
+    style: anstyle::Style,
+    link: Option<&str>,
+    links: bool,
+) -> std::io::Result<()> {
+    if text.is_empty() {
+        return Ok(());
+    }
+    write!(output, "{style}")?;
+    if let Some(id) = link {
+        problem_link(output, text, id, links)?;
+    } else {
+        write!(output, "{text}")?;
+    }
+    write!(output, "{}", style.render_reset())
 }
 
 fn hud(output: &mut impl Write, id: &str, presentation: Presentation) -> std::io::Result<()> {

@@ -1,13 +1,13 @@
 use clap::{Parser, Subcommand, ValueEnum};
 
-use crate::domain::ProblemId;
+use crate::domain::{ProblemId, ProblemQuery};
 
 #[derive(Parser)]
 #[command(
     version,
     disable_help_subcommand = true,
-    about = "Read LeetCode problems in your terminal",
-    after_help = "Get started:\n  cp-cli problem show two-sum\n\nUse the slug from a problem URL, such as two-sum.\nFor scripts, add --format json."
+    about = "Find and read LeetCode problems in your terminal",
+    after_help = "Get started:\n  cp-cli problem search \"two sum\"\n  cp-cli problem show two-sum\n\nUse a title or number to search, then open its slug.\nFor scripts, add --format json."
 )]
 pub(crate) struct Cli {
     #[arg(long, value_enum, global = true, default_value = "leetcode")]
@@ -98,5 +98,11 @@ pub(crate) enum ProblemCommand {
         /// Slug from the problem URL, such as two-sum (not its numeric number)
         #[arg(value_name = "SLUG")]
         id: ProblemId,
+    },
+    /// Search public problems by title or number
+    Search {
+        /// Search text, such as two sum or 1
+        #[arg(value_name = "QUERY")]
+        query: ProblemQuery,
     },
 }

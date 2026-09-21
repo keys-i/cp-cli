@@ -12,6 +12,12 @@ pub(crate) struct Palette {
     code: u8,
     math: u8,
     link: u8,
+    pub(crate) result_number: u8,
+    pub(crate) result_title: u8,
+    pub(crate) result_slug: u8,
+    pub(crate) easy: u8,
+    pub(crate) medium: u8,
+    pub(crate) hard: u8,
     pub(crate) shadow: u8,
     light: bool,
 }
@@ -69,13 +75,29 @@ impl Theme {
         };
         let background = luminance(background);
         let gradient = gradient.map(|color| readable(color, background));
+        let accent = readable(accent, background);
+        let result_title = gradient
+            .into_iter()
+            .find(|color| *color != accent)
+            .unwrap_or(accent);
+        let result_title = readable_distinct(result_title, background, accent);
         Palette {
             gradient,
-            accent: readable(accent, background),
+            accent,
             code: readable(code, background),
             math: readable(code, background),
-            link: readable(accent, background),
-            shadow: if light { 250 } else { 239 },
+            link: accent,
+            result_number: accent,
+            result_title,
+            result_slug: if matches!(self, Self::Arcade) {
+                gradient[1]
+            } else {
+                accent
+            },
+            easy: readable(if light { 28 } else { 108 }, background),
+            medium: readable(if light { 94 } else { 179 }, background),
+            hard: readable(if light { 124 } else { 174 }, background),
+            shadow: readable(if light { 250 } else { 239 }, background),
             light,
         }
     }
@@ -148,14 +170,33 @@ fn readable(index: u8, background: f64) -> u8 {
     // Preserve the nearest available color that meets normal-text contrast
     (16..=255)
         .filter(|candidate| contrast(luminance(rgb(*candidate)), background) >= 4.5)
-        .min_by_key(|candidate| {
-            rgb(*candidate)
-                .into_iter()
-                .zip(original)
-                .map(|(a, b)| (i32::from(a) - i32::from(b)).pow(2))
-                .sum::<i32>()
-        })
+        .min_by_key(|candidate| color_distance(rgb(*candidate), original))
         .unwrap_or(if background > 0.179 { 16 } else { 231 })
+}
+
+fn readable_distinct(index: u8, background: f64, other: u8) -> u8 {
+    const MIN_DISTANCE: i32 = 30 * 30;
+    let original = rgb(index);
+    let other = rgb(other);
+    let candidate = readable(index, background);
+    if color_distance(rgb(candidate), other) >= MIN_DISTANCE {
+        return candidate;
+    }
+    (16..=255)
+        .filter(|candidate| {
+            contrast(luminance(rgb(*candidate)), background) >= 4.5
+                && color_distance(rgb(*candidate), other) >= MIN_DISTANCE
+        })
+        .min_by_key(|candidate| color_distance(rgb(*candidate), original))
+        .unwrap_or(candidate)
+}
+
+fn color_distance(first: [u8; 3], second: [u8; 3]) -> i32 {
+    first
+        .into_iter()
+        .zip(second)
+        .map(|(a, b)| (i32::from(a) - i32::from(b)).pow(2))
+        .sum()
 }
 
 #[cfg(test)]
@@ -185,9 +226,17 @@ fn palettes_follow_profile_contrast() {
                 palette.code,
                 palette.math,
                 palette.link,
+                palette.result_number,
+                palette.result_title,
+                palette.result_slug,
+                palette.easy,
+                palette.medium,
+                palette.hard,
+                palette.shadow,
             ]) {
                 assert!(contrast(luminance(rgb(color)), luminance(background)) >= 4.5);
             }
+            assert_ne!(palette.result_number, palette.result_title);
         }
     }
 }

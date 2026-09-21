@@ -5,7 +5,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     cli::{Cli, Color, Command, Format, HeadingSize, ProblemCommand, Theme},
-    domain::{Problem, ProblemId},
+    domain::{Difficulty, Problem, ProblemId, ProblemQuery, ProblemSearch, ProblemSummary},
     output::{self, Presentation},
 };
 
@@ -28,6 +28,16 @@ fn render(problem: &Problem, format: Format, presentation: Presentation) -> Test
     Ok(String::from_utf8(bytes)?)
 }
 
+fn render_search(
+    search: &ProblemSearch,
+    format: Format,
+    presentation: Presentation,
+) -> TestResult<String> {
+    let mut bytes = Vec::new();
+    output::search(&mut bytes, format, search, presentation)?;
+    Ok(String::from_utf8(bytes)?)
+}
+
 fn assert_contains(text: &str, values: &[&str]) {
     for value in values {
         assert!(text.contains(value), "missing {value:?} in:\n{text}");
@@ -40,8 +50,8 @@ fn assert_excludes(text: &str, values: &[&str]) {
     }
 }
 
-#[test]
-fn cli_rendering_and_terminal_contract() -> TestResult {
+#[tokio::test]
+async fn cli_rendering_and_terminal_contract() -> TestResult {
     let cli = Cli::try_parse_from([
         "cp-cli",
         "--platform",
@@ -56,12 +66,25 @@ fn cli_rendering_and_terminal_contract() -> TestResult {
     ])?;
     let Command::Problem {
         command: ProblemCommand::Show { id },
-    } = cli.command;
+    } = cli.command
+    else {
+        return Err("expected show command".into());
+    };
     assert_eq!(id.as_ref(), "two-sum");
     assert!(matches!(cli.format, Format::Json));
     assert!(matches!(cli.theme, Theme::Possum));
     assert!(cli.sound);
     assert!(cli.no_animation);
+    let search_cli =
+        Cli::try_parse_from(["cp-cli", "problem", "search", "two sum", "--format", "json"])?;
+    let Command::Problem {
+        command: ProblemCommand::Search { query },
+    } = search_cli.command
+    else {
+        return Err("expected search command".into());
+    };
+    assert_eq!(query.as_ref(), "two sum");
+    assert!(matches!(search_cli.format, Format::Json));
     let animated = crate::possum::loading_frames(80, true, true);
     let still = crate::possum::loading_frames(80, true, false);
     assert_eq!(animated.len(), 10);
@@ -106,6 +129,7 @@ fn cli_rendering_and_terminal_contract() -> TestResult {
         &["cp-cli", "--help"][..],
         &["cp-cli", "problem", "--help"],
         &["cp-cli", "problem", "show", "--help"],
+        &["cp-cli", "problem", "search", "--help"],
     ] {
         assert!(matches!(
             Cli::try_parse_from(args),
@@ -116,6 +140,7 @@ fn cli_rendering_and_terminal_contract() -> TestResult {
         &["cp-cli", "help"][..],
         &["cp-cli", "problem", "help"],
         &["cp-cli", "problem", "show"],
+        &["cp-cli", "problem", "search"],
         &["cp-cli", "problem", "show", "two-sum", "--format", "yaml"],
         &["cp-cli", "--theme", "crt", "problem", "show", "two-sum"],
     ] {
@@ -146,6 +171,19 @@ fn cli_rendering_and_terminal_contract() -> TestResult {
     for (length, valid) in [(127, true), (128, true), (129, false), (1024, false)] {
         assert_eq!("a".repeat(length).parse::<ProblemId>().is_ok(), valid);
     }
+    for (query, expected) in [
+        ("two sum", "two sum"),
+        ("  graph  ", "graph"),
+        ("1", "1"),
+        ("C++", "C++"),
+    ] {
+        let query = query.parse::<ProblemQuery>()?;
+        assert_eq!(query.as_ref(), expected);
+    }
+    for query in ["", " ", "two\nsum", "two\tsum", "\u{1b}[31m", "é"] {
+        assert!(query.parse::<ProblemQuery>().is_err(), "query={query:?}");
+    }
+    assert!("a".repeat(101).parse::<ProblemQuery>().is_err());
 
     let plain = presentation(false, false, false, 80);
     let problem = Problem {
@@ -254,6 +292,139 @@ last
     let redirected = render(&problem, Format::Text, presentation(true, false, false, 80))?;
     assert_excludes(&redirected, &["POSSUM//", "\x1b[0;5;38;5;"]);
 
+    let search = ProblemSearch {
+        query: "two sum".parse()?,
+        total: 23,
+        results: vec![
+            ProblemSummary {
+                number: 1,
+                id: "two-sum".parse()?,
+                title: "Two Sum".into(),
+                difficulty: Difficulty::Easy,
+                paid_only: false,
+            },
+            ProblemSummary {
+                number: 1214,
+                id: "two-sum-bsts".parse()?,
+                title: "Two Sum BSTs".into(),
+                difficulty: Difficulty::Medium,
+                paid_only: true,
+            },
+            ProblemSummary {
+                number: 1879,
+                id: "minimum-xor-sum-of-two-arrays".parse()?,
+                title: "Minimum XOR Sum of Two Arrays".into(),
+                difficulty: Difficulty::Hard,
+                paid_only: false,
+            },
+        ],
+    };
+    let search_text = render_search(&search, Format::Text, plain)?;
+    assert_contains(
+        &search_text,
+        &[
+            "POSSUM//SCAN  3 of 23 matches",
+            "Search: two sum",
+            "PROBLEM",
+            "LEVEL",
+            "SLUG",
+            "─┼─",
+            "Two Sum",
+            "[ EASY ]",
+            "leetcode/two-sum",
+            "Two Sum BSTs",
+            "[MEDIUM]",
+            "PREMIUM",
+            "[ HARD ]",
+            "leetcode/minimum-xor-sum-of-two-",
+            "arrays",
+            "20 more matches — refine your search",
+        ],
+    );
+    let first_result = search_text
+        .lines()
+        .find(|line| line.contains("Two Sum") && line.contains("[ EASY ]"))
+        .ok_or("missing first result row")?;
+    assert_contains(first_result, &["1", "leetcode/two-sum"]);
+    assert_excludes(&search_text, &["\u{1b}"]);
+    let styled_search = render_search(&search, Format::Text, rich)?;
+    assert_contains(
+        &styled_search,
+        &[
+            "POSSUM//SCAN",
+            "\x1b]8;;https://leetcode.com/problems/two-sum/\x1b\\",
+        ],
+    );
+    for color in [
+        rich.palette.result_number,
+        rich.palette.result_title,
+        rich.palette.result_slug,
+        rich.palette.easy,
+        rich.palette.medium,
+        rich.palette.hard,
+    ] {
+        assert_contains(&styled_search, &[&format!("38;5;{color}m")]);
+    }
+    let search_json: serde_json::Value =
+        serde_json::from_str(&render_search(&search, Format::Json, rich)?)?;
+    assert_eq!(search_json["query"], "two sum");
+    assert_eq!(search_json["total"], 23);
+    assert_eq!(search_json["results"][0]["difficulty"], "easy");
+    assert_eq!(search_json["results"][1]["paid_only"], true);
+    assert_eq!(search_json["results"][2]["difficulty"], "hard");
+
+    let empty_search = ProblemSearch {
+        query: "no result".parse()?,
+        total: 0,
+        results: Vec::new(),
+    };
+    assert_contains(
+        &render_search(&empty_search, Format::Text, plain)?,
+        &["0 matches", "No problems found"],
+    );
+    for width in [1, 2, 10, 40, 48, 80, 100] {
+        let output = render_search(
+            &search,
+            Format::Text,
+            presentation(false, false, false, width),
+        )?;
+        assert!(
+            output
+                .lines()
+                .all(|line| line.width() <= usize::from(width)),
+            "width={width}: {output}"
+        );
+    }
+    for width in [16, 32, 48, 80, 100] {
+        let output = render_search(
+            &search,
+            Format::Text,
+            presentation(true, false, true, width),
+        )?;
+        assert_eq!(
+            output
+                .matches("\x1b]8;;https://leetcode.com/problems/")
+                .count(),
+            output.matches("\x1b]8;;\x1b\\").count(),
+            "width={width}: {output}"
+        );
+        let mut stripped = Vec::new();
+        anstream::StripStream::new(&mut stripped).write_all(output.as_bytes())?;
+        let stripped = String::from_utf8(stripped)?;
+        assert!(
+            stripped
+                .lines()
+                .all(|line| line.width() <= usize::from(width)),
+            "width={width}: {stripped}"
+        );
+    }
+
+    #[cfg(not(feature = "leetcode"))]
+    assert!(matches!(
+        crate::problems::search("two".parse()?, |_, _| {}).await,
+        Err(crate::Error::LeetCodeDisabled)
+    ));
+
     let poses = [
         crate::possum::Pose::Cursor,
         crate::possum::Pose::Blink,
@@ -352,6 +523,10 @@ last
         let error = output::problem(BrokenPipe, format, &problem, rich)
             .err()
             .ok_or("expected broken pipe")?;
+        assert!(error.is_broken_pipe());
+        let error = output::search(BrokenPipe, format, &search, rich)
+            .err()
+            .ok_or("expected search broken pipe")?;
         assert!(error.is_broken_pipe());
     }
 

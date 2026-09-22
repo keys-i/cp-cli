@@ -103,7 +103,7 @@ jobs:
         run: cargo audit
 
       - name: Enforce dependency, license, and source policy
-        run: cargo deny check
+        run: cargo deny --config tools/config/deny.toml check
 
   workflow-syntax:
     name: GitHub Actions syntax

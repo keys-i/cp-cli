@@ -1,9 +1,0 @@
-[[IgnoredVulns]]
-id = "RUSTSEC-2025-0141"
-ignoreUntil = 2026-12-31
-reason = "Informational maintenance notice with no vulnerable code path; syntect still requires bincode 1 for its syntax data"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2026-0192"
-ignoreUntil = 2026-12-31
-reason = "Informational maintenance notice with no vulnerable code path; ratex still requires ttf-parser for terminal mathematics"

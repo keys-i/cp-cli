@@ -5,6 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/v/cp-cli.svg)](https://crates.io/crates/cp-cli)
 [![Downloads](https://img.shields.io/crates/d/cp-cli.svg)](https://crates.io/crates/cp-cli)
 [![License](https://img.shields.io/github/license/keys-i/cp-cli)](LICENSE)
+[![Checks](https://github.com/keys-i/cp-cli/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/keys-i/cp-cli/actions/workflows/checks.yml)
 
 [Install](#installation) · [Usage](#usage) · [Configuration](#configuration) ·
 [Changelog](docs/CHANGELOG.md) · [Contributing](docs/CONTRIBUTING.md) ·

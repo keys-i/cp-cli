@@ -1,8 +1,16 @@
 [package]
 name = "cp-cli"
-version = "0.1.0"
+version = "0.2.0"
+description = "Human-first command-line client for competitive-programming platforms"
+readme = "README.md"
+homepage = "https://github.com/keys-i/leetcode-rs"
+keywords = ["competitive-coding", "leetcode", "codeforces", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+include = ["/src/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE"]
 edition = "2024"
 rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lints]
 workspace = true
@@ -72,12 +80,12 @@ thiserror.workspace = true
 
 tokio = { version = "1", default-features = false, features = ["macros", "rt", "time"] }
 
-platform-codeforces = { path = "platforms/codeforces", optional = true }
-platform-codechef = { path = "platforms/codechef", optional = true }
-platform-hackerrank = { path = "platforms/hackerrank", optional = true }
-platform-hackerearth = { path = "platforms/hackerearth", optional = true }
-platform-leetcode = { path = "platforms/leetcode", optional = true }
-platform-project-euler = { path = "platforms/project-euler", optional = true }
+platform-codeforces = { package = "cp-cli-platform-codeforces", path = "platforms/codeforces", version = "=0.2.0", optional = true }
+platform-codechef = { package = "cp-cli-platform-codechef", path = "platforms/codechef", version = "=0.2.0", optional = true }
+platform-hackerrank = { package = "cp-cli-platform-hackerrank", path = "platforms/hackerrank", version = "=0.2.0", optional = true }
+platform-hackerearth = { package = "cp-cli-platform-hackerearth", path = "platforms/hackerearth", version = "=0.2.0", optional = true }
+platform-leetcode = { package = "cp-cli-platform-leetcode", path = "platforms/leetcode", version = "=0.2.0", optional = true }
+platform-project-euler = { package = "cp-cli-platform-project-euler", path = "platforms/project-euler", version = "=0.2.0", optional = true }
 
 [profile.release]
 opt-level = 3

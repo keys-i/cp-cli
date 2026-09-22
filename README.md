@@ -1,15 +1,15 @@
 <div align="center">
 # cp-cli
 
-[![Crates.io](https://img.shields.io/crates/v/leetcode-cli).svg)](https://crates.io/crates/leetcode-cli)
-[![Downloads](https://img.shields.io/crates/d/leetcode-cli).svg)](https://crates.io/crates/leetcode-cli)
-[![License](https://img.shields.io/github/license/keys-i/leetcode-cli)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/cp-cli.svg)](https://crates.io/crates/cp-cli)
+[![Downloads](https://img.shields.io/crates/d/cp-cli.svg)](https://crates.io/crates/cp-cli)
+[![License](https://img.shields.io/github/license/keys-i/leetcode-rs)](LICENSE)
 
 [Installation](#installation) ·
 [Quick start](#quick-start) ·
 [Commands](#commands) ·
-[Configuration](#configuration) ·
-[Contributing](CONTRIBUTING.md) ·
+[Config](#config) ·
+[Contributing](docs/CONTRIBUTING.md) ·
 [Security](SECURITY.md)
 
 </div>
@@ -46,7 +46,74 @@ that cp-cli can perform in the terminal; unavailable actions fail clearly.
 
 ## Installation
 
-Build the CLI from this workspace with Rust 1.88 or newer:
+### Prebuilt releases
+
+Download a release for your machine from
+[GitHub Releases](https://github.com/keys-i/leetcode-rs/releases/latest). Releases include
+these targets:
+
+| Machine | Release archive |
+| --- | --- |
+| macOS, Apple silicon | `cp-cli-aarch64-apple-darwin.tar.gz` |
+| macOS, Intel | `cp-cli-x86_64-apple-darwin.tar.gz` |
+| Linux, x64 | `cp-cli-x86_64-unknown-linux-musl.tar.gz` |
+| Linux, arm64 | `cp-cli-aarch64-unknown-linux-musl.tar.gz` |
+| Windows, x64 | `cp-cli-x86_64-pc-windows-msvc.zip` |
+| Windows, arm64 | `cp-cli-aarch64-pc-windows-msvc.zip` |
+
+Each release also contains `SHA256SUMS`. Verify the archive before installing it.
+
+On macOS, replace the archive name with the Intel archive when needed:
+
+```sh
+curl -LO https://github.com/keys-i/leetcode-rs/releases/latest/download/cp-cli-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/keys-i/leetcode-rs/releases/latest/download/SHA256SUMS
+grep ' cp-cli-aarch64-apple-darwin.tar.gz$' SHA256SUMS | shasum -a 256 -c -
+tar -xzf cp-cli-aarch64-apple-darwin.tar.gz
+mkdir -p "$HOME/.local/bin"
+install -m 755 cp-cli "$HOME/.local/bin/cp-cli"
+```
+
+On Linux, use `sha256sum -c -` in place of `shasum -a 256 -c -`.
+Ensure `~/.local/bin` is on your `PATH`, then open a new terminal and run:
+
+```sh
+cp-cli --help
+```
+
+For zsh, add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc`; for bash, add it to
+`~/.bashrc`.
+
+On Windows, download `cp-cli-x86_64-pc-windows-msvc.zip` (or the arm64 archive) and
+`SHA256SUMS` from the release page. Compare the archive's `Get-FileHash -Algorithm SHA256`
+output with its line in `SHA256SUMS`, then install it in PowerShell:
+
+```powershell
+$archive = "$HOME\Downloads\cp-cli-x86_64-pc-windows-msvc.zip"
+$install = Join-Path $env:LOCALAPPDATA "cp-cli"
+New-Item -ItemType Directory -Force $install | Out-Null
+Expand-Archive $archive -DestinationPath $install -Force
+[Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable("Path", "User"));$install", "User")
+```
+
+Open a new PowerShell window and run:
+
+```powershell
+cp-cli.exe --help
+```
+
+### Cargo
+
+If Rust is already installed, Cargo installs the same CLI from crates.io:
+
+```sh
+cargo install cp-cli --locked
+cp-cli --help
+```
+
+### Build from source
+
+To build this checkout, install Rust 1.88 or newer:
 
 ```sh
 cargo build --release --locked
@@ -334,7 +401,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for the complete development and review process.
+Read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for the complete development and review process.
 
 ## License
 

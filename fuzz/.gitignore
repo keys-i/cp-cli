@@ -1,0 +1,6 @@
+/artifacts/
+/corpus/*
+!/corpus/rich_text/
+/corpus/rich_text/*
+!/corpus/rich_text/mixed.md
+/target/

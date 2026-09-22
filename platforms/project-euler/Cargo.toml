@@ -1,10 +1,10 @@
 [package]
-name = "cp-cli-platform-leetcode"
+name = "cp-cli-platform-project-euler"
 version = "0.2.0"
-description = "LeetCode HTTP client used by cp-cli"
+description = "Project Euler HTTP client used by cp-cli"
 readme = false
 homepage = "https://github.com/keys-i/leetcode-rs"
-keywords = ["leetcode", "competitive-coding", "api-client"]
+keywords = ["project-euler", "competitive-coding", "api-client"]
 categories = ["api-bindings", "web-programming::http-client"]
 include = ["/src/**", "/Cargo.toml"]
 edition.workspace = true
@@ -16,9 +16,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
-serde.workspace = true
-serde_json = "1"
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 thiserror.workspace = true
 
 [dev-dependencies]

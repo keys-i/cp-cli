@@ -603,23 +603,23 @@ dependencies = [
 
 [[package]]
 name = "cp-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anstream",
  "anstyle",
  "clap",
  "console",
+ "cp-cli-platform-codechef",
+ "cp-cli-platform-codeforces",
+ "cp-cli-platform-hackerearth",
+ "cp-cli-platform-hackerrank",
+ "cp-cli-platform-leetcode",
+ "cp-cli-platform-project-euler",
  "crossterm",
  "htmd",
  "indicatif",
  "keyring",
  "markup5ever_rcdom",
- "platform-codechef",
- "platform-codeforces",
- "platform-hackerearth",
- "platform-hackerrank",
- "platform-leetcode",
- "platform-project-euler",
  "pulldown-cmark",
  "pulldown-cmark-mdcat",
  "ratex-parser",
@@ -633,6 +633,72 @@ dependencies = [
  "tokio",
  "unicode-width",
  "url",
+]
+
+[[package]]
+name = "cp-cli-platform-codechef"
+version = "0.2.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "cp-cli-platform-codeforces"
+version = "0.2.0"
+dependencies = [
+ "getrandom 0.4.3",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "cp-cli-platform-hackerearth"
+version = "0.2.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "cp-cli-platform-hackerrank"
+version = "0.2.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "cp-cli-platform-leetcode"
+version = "0.2.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "cp-cli-platform-project-euler"
+version = "0.2.0"
+dependencies = [
+ "reqwest",
+ "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
@@ -1905,78 +1971,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
-name = "platform-codechef"
-version = "0.1.0"
-dependencies = [
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
-name = "platform-codeforces"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.4.3",
- "reqwest",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
-name = "platform-hackerearth"
-version = "0.1.0"
-dependencies = [
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
-name = "platform-hackerrank"
-version = "0.1.0"
-dependencies = [
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
-name = "platform-leetcode"
-version = "0.1.0"
-dependencies = [
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
-name = "platform-project-euler"
-version = "0.1.0"
-dependencies = [
- "reqwest",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
 name = "plist"
-version = "1.8.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "740ebea15c5d1428f910cd1a5f52cebf8d25006245ed8ade92702f4943d91e07"
+checksum = "2896bade328c13f7042a297ea5ac5b0951f6cf989dea5f32c2fd98da398195cb"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "indexmap",
  "quick-xml",
  "serde",
@@ -2106,9 +2106,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
 dependencies = [
  "memchr",
 ]

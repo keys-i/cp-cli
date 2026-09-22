@@ -1,10 +1,10 @@
 [package]
-name = "cp-cli-platform-leetcode"
+name = "cp-cli-platform-codechef"
 version = "0.2.0"
-description = "LeetCode HTTP client used by cp-cli"
+description = "CodeChef HTTP client used by cp-cli"
 readme = false
 homepage = "https://github.com/keys-i/leetcode-rs"
-keywords = ["leetcode", "competitive-coding", "api-client"]
+keywords = ["codechef", "competitive-coding", "api-client"]
 categories = ["api-bindings", "web-programming::http-client"]
 include = ["/src/**", "/Cargo.toml"]
 edition.workspace = true

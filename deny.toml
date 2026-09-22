@@ -4,6 +4,8 @@
 all-features = true
 
 [advisories]
+# Fail direct adoption of unmaintained crates while reporting transitive notices for review
+unmaintained = "workspace"
 ignore = []
 
 [licenses]

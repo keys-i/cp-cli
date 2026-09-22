@@ -2,89 +2,273 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    tags:
+      - "v*"
 
 permissions: {}
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
   CARGO_NET_RETRY: "10"
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
-  release:
-    name: Publish approved releases
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: crates-io
-    concurrency:
-      group: release-plz-release-${{ github.ref }}
-      cancel-in-progress: false
+  verify:
+    name: Verify release tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
-      contents: write
-      pull-requests: read
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.88.0
+
+      - name: Verify the tag and workspace versions
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
+          version="$(jq -er '.packages[] | select(.name == "cp-cli") | .version' <<<"$metadata")"
+          test "$TAG" = "v$version"
+
+          for package in \
+            cp-cli-platform-codechef \
+            cp-cli-platform-codeforces \
+            cp-cli-platform-hackerearth \
+            cp-cli-platform-hackerrank \
+            cp-cli-platform-leetcode \
+            cp-cli-platform-project-euler; do
+            package_version="$(jq -er --arg package "$package" \
+              '.packages[] | select(.name == $package) | .version' <<<"$metadata")"
+            test "$package_version" = "$version"
+          done
+
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check package layouts
+        run: cargo package --workspace --locked --no-verify
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            archive: tar.gz
+            executable: cp-cli
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            archive: tar.gz
+            executable: cp-cli
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            archive: tar.gz
+            executable: cp-cli
+            musl: true
+          - runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-musl
+            archive: tar.gz
+            executable: cp-cli
+            musl: true
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            executable: cp-cli.exe
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            archive: zip
+            executable: cp-cli.exe
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.88.0
+          targets: ${{ matrix.target }}
+
+      - name: Install musl linker
+        if: matrix.musl
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+          linker_key="$(tr '[:lower:]-' '[:upper:]_' <<<"$TARGET")"
+          echo "CARGO_TARGET_${linker_key}_LINKER=musl-gcc" >> "$GITHUB_ENV"
+
+      - name: Build cp-cli
+        run: cargo build --release --locked --target "${{ matrix.target }}" --package cp-cli
+
+      - name: Package Unix archive
+        id: package_unix
+        if: matrix.archive == 'tar.gz'
+        env:
+          EXECUTABLE: ${{ matrix.executable }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          archive="cp-cli-${TARGET}.tar.gz"
+          mkdir -p dist/package
+          cp "target/${TARGET}/release/${EXECUTABLE}" "dist/package/${EXECUTABLE}"
+          cp README.md LICENSE dist/package/
+          tar -C dist/package -czf "dist/${archive}" "$EXECUTABLE" README.md LICENSE
+          echo "path=dist/${archive}" >> "$GITHUB_OUTPUT"
+
+      - name: Package Windows archive
+        id: package_windows
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        env:
+          EXECUTABLE: ${{ matrix.executable }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          $archive = "cp-cli-$env:TARGET.zip"
+          New-Item -ItemType Directory -Force -Path dist/package | Out-Null
+          Copy-Item "target/$env:TARGET/release/$env:EXECUTABLE" "dist/package/$env:EXECUTABLE"
+          Copy-Item README.md, LICENSE dist/package/
+          Compress-Archive -Path dist/package/* -DestinationPath "dist/$archive"
+          "path=dist/$archive" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Attest release archive
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.1.0
+        with:
+          subject-path: ${{ steps.package_unix.outputs.path || steps.package_windows.outputs.path }}
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cp-cli-${{ matrix.target }}
+          path: ${{ steps.package_unix.outputs.path || steps.package_windows.outputs.path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish crates.io packages
+    needs:
+      - verify
+      - build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
       id-token: write
     steps:
-      - name: Check out complete history
+      - name: Check out release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: stable
+          toolchain: 1.88.0
 
-      - name: Publish with release-plz
-        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139
-        with:
-          command: release
+      - name: Authenticate to crates.io
+        id: crates_io_auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      - name: Publish platform packages before cp-cli
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates_io_auth.outputs.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          for package in \
+            cp-cli-platform-codechef \
+            cp-cli-platform-codeforces \
+            cp-cli-platform-hackerearth \
+            cp-cli-platform-hackerrank \
+            cp-cli-platform-leetcode \
+            cp-cli-platform-project-euler \
+            cp-cli; do
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --user-agent "cp-cli-release/${VERSION} (https://github.com/${GITHUB_REPOSITORY})" \
+              "https://crates.io/api/v1/crates/${package}/${VERSION}")"
+            case "$status" in
+              200)
+                echo "${package} ${VERSION} is already published"
+                ;;
+              404)
+                cargo publish --locked --package "$package"
+                ;;
+              *)
+                echo "crates.io returned HTTP ${status} for ${package} ${VERSION}" >&2
+                exit 1
+                ;;
+            esac
+          done
 
-  release-pr:
-    name: Maintain release pull request
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    concurrency:
-      group: release-plz-pr-${{ github.ref }}
-      cancel-in-progress: true
+  release:
+    name: Publish release assets
+    needs:
+      - verify
+      - build
+      - publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
     permissions:
+      attestations: write
       contents: write
-      pull-requests: write
-    env:
-      RELEASE_APP_CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
+      id-token: write
     steps:
-      - name: Check out complete history
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download release archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          fetch-depth: 0
-          persist-credentials: false
+          pattern: cp-cli-*
+          path: dist
+          merge-multiple: true
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-        with:
-          toolchain: stable
+      - name: Write SHA-256 checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          shasum -a 256 ./*.tar.gz ./*.zip > SHA256SUMS
 
-      - name: Mint short-lived release token
-        id: app-token
-        if: env.RELEASE_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      - name: Attest release checksums
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.1.0
         with:
-          client-id: ${{ env.RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
+          subject-checksums: dist/SHA256SUMS
 
-      - name: Update the release pull request
-        uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139
-        with:
-          command: release-pr
+      - name: Create or update the GitHub release
         env:
-          GITHUB_TOKEN: ${{ steps['app-token'].outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --verify-tag \
+              --title "cp-cli $VERSION" \
+              --generate-notes
+          fi

@@ -1,0 +1,28 @@
+[package]
+name = "cp-cli-platform-codeforces"
+version = "0.2.0"
+description = "Codeforces HTTP client used by cp-cli"
+readme = false
+homepage = "https://github.com/keys-i/leetcode-rs"
+keywords = ["codeforces", "competitive-coding", "api-client"]
+categories = ["api-bindings", "web-programming::http-client"]
+include = ["/src/**", "/Cargo.toml"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+getrandom = "0.4"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "gzip"] }
+serde.workspace = true
+serde_json = "1"
+sha2 = "0.10"
+thiserror.workspace = true
+tokio = { version = "1", default-features = false, features = ["time"] }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["macros", "rt", "net", "io-util"] }

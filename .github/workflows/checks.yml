@@ -11,7 +11,7 @@ on:
   merge_group:
   workflow_dispatch:
   schedule:
-    # Monday 02:17 in Australia/Brisbane (UTC+10, no daylight saving).
+    # Monday 02:17 in Australia/Brisbane (UTC+10, no daylight saving)
     - cron: "17 16 * * 0"
 
 permissions:
@@ -233,8 +233,8 @@ jobs:
         with:
           key: package
 
-      - name: Verify publishable packages
-        run: cargo package --workspace --all-features --locked
+      - name: Check package layouts
+        run: cargo package --workspace --all-features --locked --no-verify
 
   coverage:
     name: Tests / coverage

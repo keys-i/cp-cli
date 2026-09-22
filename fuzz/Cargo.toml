@@ -1,0 +1,23 @@
+[package]
+name = "cp-cli-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.12"
+pulldown-cmark = { version = "0.12", default-features = false }
+ratex-parser = "0.1.14"
+term-maths = "1"
+
+[[bin]]
+name = "rich_text"
+path = "fuzz_targets/rich_text.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

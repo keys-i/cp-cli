@@ -1,56 +1,47 @@
 <div align="center">
+
 # cp-cli
 
 [![Crates.io](https://img.shields.io/crates/v/cp-cli.svg)](https://crates.io/crates/cp-cli)
 [![Downloads](https://img.shields.io/crates/d/cp-cli.svg)](https://crates.io/crates/cp-cli)
-[![License](https://img.shields.io/github/license/keys-i/leetcode-rs)](LICENSE)
+[![License](https://img.shields.io/github/license/keys-i/cp-cli)](LICENSE)
 
-[Installation](#installation) ·
-[Quick start](#quick-start) ·
-[Commands](#commands) ·
-[Config](#config) ·
-[Contributing](docs/CONTRIBUTING.md) ·
-[Security](SECURITY.md)
+[Install](#installation) · [Usage](#usage) · [Configuration](#configuration) · [Changelog](docs/CHANGELOG.md) · [Contributing](docs/CONTRIBUTING.md) · [Security](docs/SECURITY.md)
 
 </div>
 
 > [!NOTE]
-> Not affiliated with or endorsed by LeetCode, HackerRank, Codeforces, Exercism, Project Euler, HackerEarth or CodeChef
+> cp-cli is not affiliated with or endorsed by LeetCode, HackerRank, Codeforces, Exercism, Project Euler, HackerEarth, or CodeChef.
 
-## Overview
-
-`cp-cli` is a Rust CLI for exploring coding problems from the terminal. LeetCode has the
-full solve workflow. Other platforms expose the public reads and supported local actions
-that cp-cli can perform in the terminal; unavailable actions fail clearly.
-
-## Features
-
-- Browse LeetCode, HackerRank, Codeforces, HackerEarth and Project Euler problems through their public interfaces
-- Use the official Exercism CLI for downloading, testing and submitting exercises
-- Read HackerRank and CodeChef public profiles, Codeforces blogs and CodeChef Discuss in the same terminal reader
-- Fetch a problem by its platform ID or title slug
-- Search public problems by title or number without downloading the full catalogue
-- Browse a bounded page by difficulty and tag
-- Navigate problem, contest and discussion tables with arrow keys, sortable headers and mouse input
-- Open the current LeetCode Daily Challenge with one public request
-- Pick any available language starter into a local `<slug>.<extension>` file
-- Run LeetCode's generated example cases and submit as separate explicit commands
-- Validate and clear a configured LeetCode session without opening a browser
-- Read styled Markdown, highlighted code, tables and selectable LaTeX equations inside the terminal
-- Automatically enlarge titles in Apple Terminal and Windows Terminal
-- A responsive raster-glyph possum HUD and honest animated transfer progress
-- Possum, arcade, phosphor, amber and moonlight themes that adapt to the terminal profile
-- Emit bounded structured JSON for scripts
-
-## Demo
+`cp-cli` is a Rust terminal client for coding-problem platforms. It supports public browsing, local starter files, LeetCode testing and submission, structured JSON, and terminal rendering for Markdown, code, tables, and LaTeX.
 
 ## Installation
 
-### Prebuilt releases
+### macOS and Linux
 
-Download a release for your machine from
-[GitHub Releases](https://github.com/keys-i/leetcode-rs/releases/latest). Releases include
-these targets:
+The native installer detects Apple silicon, Intel macOS, x64 Linux, and arm64 Linux; verifies the release checksum; and installs to `~/.local/bin` by default.
+
+```sh
+curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO https://github.com/keys-i/cp-cli/releases/latest/download/install.sh
+sh install.sh
+```
+
+Use `--version 3.1.8` for a specific release or `--install-dir <DIRECTORY>` for another location. The installer reports when the directory must be added to `PATH`.
+
+### Windows
+
+PowerShell detects x64 or arm64 Windows, verifies the checksum, installs for the current user, and adds its directory to the user `PATH` when needed.
+
+```powershell
+Invoke-WebRequest https://github.com/keys-i/cp-cli/releases/latest/download/install.ps1 -OutFile "$env:TEMP\cp-cli-install.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\cp-cli-install.ps1"
+```
+
+Add `-Version 3.1.8` or `-InstallDir <DIRECTORY>` after the script path to override defaults. `-ExecutionPolicy Bypass` applies only to that process.
+
+### Manual archives
+
+[GitHub Releases](https://github.com/keys-i/cp-cli/releases/latest) provides these archives. Every release includes `SHA256SUMS`, covering the installers and all archives, plus release provenance.
 
 | Machine | Release archive |
 | --- | --- |
@@ -61,66 +52,21 @@ these targets:
 | Windows, x64 | `cp-cli-x86_64-pc-windows-msvc.zip` |
 | Windows, arm64 | `cp-cli-aarch64-pc-windows-msvc.zip` |
 
-Each release also contains `SHA256SUMS`. Verify the archive before installing it.
-
-On macOS, replace the archive name with the Intel archive when needed:
-
-```sh
-curl -LO https://github.com/keys-i/leetcode-rs/releases/latest/download/cp-cli-aarch64-apple-darwin.tar.gz
-curl -LO https://github.com/keys-i/leetcode-rs/releases/latest/download/SHA256SUMS
-grep ' cp-cli-aarch64-apple-darwin.tar.gz$' SHA256SUMS | shasum -a 256 -c -
-tar -xzf cp-cli-aarch64-apple-darwin.tar.gz
-mkdir -p "$HOME/.local/bin"
-install -m 755 cp-cli "$HOME/.local/bin/cp-cli"
-```
-
-On Linux, use `sha256sum -c -` in place of `shasum -a 256 -c -`.
-Ensure `~/.local/bin` is on your `PATH`, then open a new terminal and run:
-
-```sh
-cp-cli --help
-```
-
-For zsh, add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc`; for bash, add it to
-`~/.bashrc`.
-
-On Windows, download `cp-cli-x86_64-pc-windows-msvc.zip` (or the arm64 archive) and
-`SHA256SUMS` from the release page. Compare the archive's `Get-FileHash -Algorithm SHA256`
-output with its line in `SHA256SUMS`, then install it in PowerShell:
-
-```powershell
-$archive = "$HOME\Downloads\cp-cli-x86_64-pc-windows-msvc.zip"
-$install = Join-Path $env:LOCALAPPDATA "cp-cli"
-New-Item -ItemType Directory -Force $install | Out-Null
-Expand-Archive $archive -DestinationPath $install -Force
-[Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable("Path", "User"));$install", "User")
-```
-
-Open a new PowerShell window and run:
-
-```powershell
-cp-cli.exe --help
-```
-
-### Cargo
-
-If Rust is already installed, Cargo installs the same CLI from crates.io:
+### Cargo and source
 
 ```sh
 cargo install cp-cli --locked
 cp-cli --help
 ```
 
-### Build from source
-
-To build this checkout, install Rust 1.88 or newer:
+Build this checkout with Rust 1.88 or newer:
 
 ```sh
 cargo build --release --locked
 ./target/release/cp-cli --help
 ```
 
-## Quick start
+## Usage
 
 ```sh
 cargo run --locked -- problem daily
@@ -132,233 +78,55 @@ cargo run --locked -- --platform project-euler problem list --recent
 cargo run --locked -- --platform codechef discussion list
 ```
 
-## Commands
+`problem show <ID>` prints a statement and details. LeetCode accepts a number or slug, HackerRank a URL slug, Codeforces a contest/index such as `4A`, and Project Euler a positive number. `--platform leetcode` is optional; use `--format text` (default) or `--format json`. `problem daily` opens the public LeetCode Daily Challenge in the same formats.
 
-`cp-cli problem daily` opens the current LeetCode Daily Challenge using the same
-rich text or JSON output as `problem show`.
+`problem list` shows 20 results at a time. LeetCode accepts `--difficulty easy|medium|hard`, `--tag graph`, or both without downloading its full catalogue. HackerRank uses 20-row Algorithms pages by default and accepts `--track`; Codeforces fetches one metadata catalogue and shows 20-row pages; both accept `--page`. Project Euler shows its full compact catalogue in 50-problem pages or its newest ten with `--recent`. HackerEarth defaults to basic input/output practice; select a returned nested path with `--topic`, for example `algorithms/searching/linear-search`. LeetCode-only filters are rejected on other platforms.
 
-`cp-cli problem show <ID>` prints the problem details and available statement. LeetCode
-accepts a number or slug, HackerRank accepts its URL slug, Codeforces accepts the contest
-number plus index, such as `4A`, and Project Euler accepts a positive number. Use
-`--format text` (the default) or `--format json`; `--platform leetcode` is optional.
+`problem search <QUERY>` returns the first 20 matches and a total; quote spaces, for example `problem search "binary tree"`. `problem pick <NUMBER|SLUG>` writes a selected LeetCode or HackerRank starter to `<slug>.<extension>`. Exercism delegates pick, test, and submit to `exercism`; `--dir` is its workspace, and the token is configured at `exercism.org/settings/api_cli`. Redirected LeetCode/HackerRank input needs `--lang` and `--dir`; Exercism needs `--track` and `--dir`.
 
-`cp-cli problem list` browses 20 public problems. LeetCode supports
-`--difficulty easy|medium|hard`, `--tag graph`, or both without downloading its full
-catalogue. HackerRank reads its Algorithms track by default in 20-row pages; select another
-track with `--track`. Codeforces exposes one
-full public metadata catalogue, then shows it in bounded 20-row pages. Use `--page` with
-either platform.
-Project Euler reads its complete compact catalogue in 50-problem pages, including new
-problems beyond the historical archive, or its ten newest problems with `--recent`.
-HackerEarth defaults to its basic input/output practice path; pass the exact nested path
-returned by HackerEarth with `--topic`, such as `algorithms/searching/linear-search`.
-HackerRank, Codeforces, HackerEarth and Project Euler reject LeetCode-only filters instead of silently
-ignoring them.
+`problem test <FILE>` runs the marked solution against LeetCode’s generated examples and does not submit. `problem submit <FILE>` submits the marked region once and polls for up to 60 seconds. Both use the file’s selected language. `stats` returns authenticated LeetCode counts by difficulty and ten recent submissions; `--format json` returns the same bounded data. `--platform codeforces stats <HANDLE>` returns a public profile, rating history, and 100 recent submissions; HackerRank and CodeChef accept a public account name in the same position.
 
-HackerRank supplies its statement source, so `problem show` renders its Markdown and
-mathematics inside the terminal. Codeforces' public API supplies metadata but no statement;
-the terminal view therefore shows the rating, tags, solve count and official clickable URL.
-Project Euler renders its public statement in the terminal with its required CC BY-NC-SA
-attribution. Exercism integrates its official CLI for downloading, testing and submitting an
-exercise after `problem pick --track <TRACK>`. HackerEarth renders public practice statements.
-CodeChef does not expose a dependable public problem catalogue, so that command fails clearly.
+`contest list` and `contest show <SLUG>` provide LeetCode’s public upcoming UTC schedule and summary; both support text or JSON. `contest status` reads signed-in registration state. `discussion list [NUMBER|SLUG]` lists trending posts or recent problem solutions; `discussion show <ID>` renders bounded Markdown, including newer LeetCode articles, without raw HTML or unsafe links. Use `--help`, `problem --help`, or a command’s `--help`; there is no `help` subcommand.
 
-## Platform support
+In an interactive terminal, lists and recent submissions use a reader that is 60% of terminal width. Arrows move rows and headers, Enter sorts or opens, mouse controls select or sort, and `q`, Escape, or Ctrl-C closes it. At under 80 columns, with redirected output, or in JSON mode, tables are static. Statements use normal scrollback capped at 100 columns. `problem show` accepts only a positive number or a 1–128-character ASCII slug (`1`, `two-sum`), never a full URL.
 
-**Terminal-native** means cp-cli renders or performs the action itself. **Official CLI**
-means cp-cli invokes the platform's supported upstream tool. A capability marked
-**Unavailable** returns a clear terminal error; no command hands the task off to a website.
+### Platform support
+
+**Terminal-native** means cp-cli performs the action. **Official CLI** means it invokes the platform tool. **Unavailable** returns an error.
 
 | Platform | Auth and stats | Problems | Contests | Discussions |
 | --- | --- | --- | --- | --- |
-| LeetCode | Existing environment or saved session validation and account stats | Terminal-native list, show, starter, test and submit | List, show and status are terminal-native; participation and organizer actions are unavailable | Read in terminal; writing is unavailable without a verified mutation API |
-| HackerRank | Terminal-native public profile stats | Terminal-native list, show and starter | Unavailable | Unavailable |
+| LeetCode | Existing environment or saved-session validation and account stats | Terminal-native list, show, starter, test, and submit | Terminal-native list, show, and status; participation and organizer actions unavailable | Read in terminal; writing unavailable without a verified mutation API |
+| HackerRank | Terminal-native public profile stats | Terminal-native list, show, and starter | Unavailable | Unavailable |
 | Codeforces | Signed API credentials and terminal-native public stats | Terminal-native list and metadata show | Terminal-native list and show | Terminal-native recent blogs and comments |
-| Exercism | Guided official CLI token configuration | Official `exercism` CLI pick, test and submit | Unavailable | Unavailable |
+| Exercism | Guided official CLI token configuration | Official `exercism` CLI pick, test, and submit | Unavailable | Unavailable |
 | Project Euler | Unavailable | Terminal-native catalogue list, `--recent`, and statement show | Unavailable | Unavailable |
 | HackerEarth | Unavailable | Terminal-native practice-topic list and statement show | Unavailable | Unavailable |
 | CodeChef | Terminal-native public profile stats | Unavailable | Unavailable | Terminal-native CodeChef Discuss list and show |
 
-cp-cli does not copy browser cookies or automate undocumented private APIs.
+HackerRank statements render Markdown and maths. Codeforces has public metadata but no statements, so its view provides rating, tags, solve count, and an official URL. Project Euler retains required CC BY-NC-SA attribution. HackerEarth renders public practice statements. CodeChef has no dependable public problem catalogue. Contest participation, organizer actions, and community writes remain unavailable where no verified API exists. cp-cli does not copy browser cookies or automate undocumented private APIs.
 
-`cp-cli problem search <QUERY>` shows the first 20 matching problems in a
-responsive table. Number and name use contrasting theme colours, linked slugs
-are underlined, and Easy, Medium and Hard remain readable colour-coded badges.
-Premium results are marked. Quote queries containing spaces, such as
-`problem search "binary tree"`. The total match count makes truncation explicit;
-refine the query to narrow a longer result set.
+## Configuration
 
-`cp-cli problem pick <NUMBER|SLUG>` fetches every starter variant LeetCode offers,
-then asks which language to use and where to write `<slug>.<extension>`. HackerRank uses
-the same local starter flow. Exercism delegates download, test and submit to the official
-`exercism` executable; the chosen `--dir` becomes its configured workspace. Configure its
-API token first at `exercism.org/settings/api_cli`. For redirected input, LeetCode and
-HackerRank need `--lang` and `--dir`; Exercism needs `--track` and `--dir`.
+Colour is automatic; override with `--color always` or `--color never`. `NO_COLOR` disables automatic colour, and `TERM=dumb` also disables enlarged titles. Redirected text and JSON have no terminal controls by default; `--color always` can colour redirected text, but JSON remains clean.
 
-`cp-cli problem test <FILE>` sends only the marked solution and LeetCode's generated
-example cases to the Run endpoint, then shows the output without submitting. `cp-cli
-problem submit <FILE>` is a separate explicit action that submits the marked region once,
-then polls the judge for up to 60 seconds. Both commands use the language picked for the
-solution file.
+Themes are `possum` (default), `arcade`, `phosphor`, `amber`, and `moonlight`. The possum is an original colour-aware raster glyph using the cell-as-pixel approach described in [Rendering in the Terminal](https://benmandrew.com/articles/terminal-renderer); narrow windows use a text badge and very narrow windows omit it. Problem text keeps the terminal foreground, with theme styling for headings, inputs, outputs, code, mathematics, and links. cp-cli does not change the terminal font, profile colours, or background.
 
-`cp-cli stats` uses the authenticated LeetCode account to show solved counts, accepted and total
-submission counts by difficulty, and the 10 most recent submissions. Add `--format json`
-for the same bounded data as structured output. `--platform codeforces stats <HANDLE>`
-shows its public profile, rating history and latest 100 submissions. HackerRank and CodeChef
-accept their public account name in the same position.
+`--background auto` queries the terminal briefly, then tries `COLORFGBG`, then assumes dark (or light for `--theme light`). Override with `--background light` or `--background dark`. The 256-colour palette targets 4.5:1 contrast for the detected background under [WCAG text contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html); custom palettes and translucent backgrounds can change actual contrast.
 
-`cp-cli contest list` shows the bounded upcoming LeetCode schedule with UTC start times
-and durations. `cp-cli contest show <SLUG>` opens one contest summary using the slug from
-its LeetCode URL. Both are public and support text or JSON output. `contest status` reads
-the signed-in account's registration state. Codeforces contest list and show are
-terminal-native. Contest participation and organizer actions are unavailable when the
-platform does not expose a verified callable API.
+While connecting, the possum has four bounded 260 ms frames. If the server supplies a response size, the progress bar reports received bytes; it never invents a percentage. `--no-animation` shows a still possum. Progress is disabled for JSON and unless both output streams are terminals. `--sound` emits one terminal bell only after successful text output, never for JSON, redirected output, or failures.
 
-`cp-cli discussion list [NUMBER|SLUG]` shows trending posts or the newest solution posts
-for one problem. `discussion show <ID>` renders the full bounded Markdown body, including
-LeetCode's newer article posts, without executing raw HTML or unsafe links. `discussion
-create [NUMBER|SLUG]`, `reply <ID>`, `edit <ID>` and `delete <ID>` fail clearly because
-LeetCode does not expose a verified mutation contract for them. Codeforces blogs and comments,
-plus CodeChef Discuss list and show, are terminal-native. Community write actions are unavailable.
+Apple Terminal (`TERM_PROGRAM=Apple_Terminal`) and Windows Terminal (`WT_SESSION`) can use native double-size titles. `--heading-size auto` enables them at 60 columns or wider; `--heading-size large` enables them in narrower windows; `--heading-size normal` disables them. Other terminals use normal bold titles. This changes rendered title size, not the font, and works with `--color never` and `NO_COLOR`.
 
-On an interactive terminal, problem, contest and discussion lists and recent submissions
-share the same 60%-width reader. Arrow keys move between rows and headers, Enter sorts a
-focused header or opens a focused row, the mouse selects and sorts, and `q` closes the reader.
-Piped text and JSON keep the stable non-interactive output.
+LaTeX in `$…$`, `$$…$$`, `\(…\)`, and `\[…\]` renders as Unicode math, including fractions, roots, scripts, and matrices, without a browser, graphics protocol, or TeX installation. Multiline equations are blocks; unsupported, oversized, and malformed expressions stay as source. Code preserves literal delimiters. Images are descriptions and links only and are not fetched. The terminal font must contain the required Unicode characters.
 
-For `problem show`, use a positive problem number or the slug from its URL, such as
-`1` or `two-sum`. Full URLs are not accepted. Slugs accept 1–128 ASCII letters,
-digits, hyphens or underscores.
-
-### Terminal appearance
-
-Color is automatic. Use `--color always` or `--color never` to override it;
-`NO_COLOR` disables automatic color; `TERM=dumb` also disables enlarged titles.
-Redirected text and JSON
-contain no terminal controls by default. `--color always` can color redirected
-text, but JSON always remains clean.
-
-The default `possum` theme uses soft neutral text with a muted pink accent. On a
-color terminal, an original possum sprite is sampled into aspect-corrected,
-color-aware glyphs using the cell-as-pixel approach from
-[Rendering in the Terminal](https://benmandrew.com/articles/terminal-renderer),
-rather than hand-shaped block art. It keeps the grey fur,
-cream face, dark eyes, pink nose, paws and curling tail legible in Apple Terminal
-and Windows Terminal. Narrow windows receive a text badge and very constrained
-windows omit decoration. The `POSSUM//ARCADE` HUD, `QUEST leetcode/two-sum`
-label, double-size title and offset shadow form one retro grammar without
-surrounding the statement in chrome.
-
-Problem prose keeps the terminal foreground for long-form comfort. Section and
-example headings use the theme accent, while inputs, outputs and inline code use
-a secondary theme colour; mathematics and links retain their own semantic styling.
-The same hierarchy remains visible through headings, weight and underline when
-colour is unavailable.
-
-`--theme arcade` supplies the vivid cyan, violet and pink 80s palette.
-`--theme phosphor` uses subdued terminal green, `--theme amber` uses warm amber,
-and `--theme moonlight` uses muted blue. The default keeps long reading calm;
-neon remains an explicit choice. The CLI cannot replace a terminal profile's
-font; arcade lettering comes from the monospace composition, double-size title
-and compact system labels, so content stays selectable and searchable.
-
-`--background auto` queries the terminal background with a short timeout, then
-tries `COLORFGBG`, then assumes dark (light for `--theme light`). Override it with
-`--background light` or `--background dark` when detection is unavailable or a
-slow remote connection times out. Body text keeps the profile's foreground;
-the CLI never changes profile colors or paints a background. The 256-color
-accent palette targets at least 4.5:1 contrast against the detected background,
-following [WCAG's text contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html).
-Custom remapping of the extended palette and translucent backgrounds can change
-the actual contrast. No palette is universally the most comfortable.
-
-While a request connects, the possum looks toward the live status cursor,
-blinks, and occasionally scratches an ear. The animation updates at 260 ms and
-uses four bounded frames. After the command exits, native blink attributes keep
-the final possum blinking and scratching its ear without a resident process, and
-the `QUEST` label remains hoverable and clickable where terminal hyperlinks are
-supported. When the
-server supplies a response size, it settles beside a bracketed arcade bar
-showing actual bytes received. It clears before the problem appears; no
-percentage is invented while waiting. `--no-animation` replaces it with one
-still possum and disables the retained blink. Progress only appears when both
-output streams are terminals, and never in JSON mode. Terminals that ignore the
-blink or hyperlink controls show the same static, readable output.
-
-`--sound` rings one terminal bell after successful text output. It is opt-in,
-never runs for JSON, redirected output or failures, and follows the terminal
-profile's own audible or visual bell setting.
-
-Short problem titles sit beside the possum as bold sentence-case text in normal-size
-terminals. Apple Terminal (`TERM_PROGRAM=Apple_Terminal`) and Windows Terminal
-(`WT_SESSION`) use native double-height, double-width titles above normal-size body
-text because terminal sizing applies to a complete row. `--heading-size auto`
-enlarges titles at widths of 60 columns or more; `--heading-size large` also enables
-them in narrower windows;
-`--heading-size normal` disables enlargement. Long titles wrap at the enlarged
-size. Other terminals and multiplexers use normal-size, bold titles. This changes
-the title's rendered size, not your terminal profile's font setting. Enlargement
-still works with `--color never` or `NO_COLOR`. These terminals offer normal and
-double-size text, not arbitrary per-word point sizes.
-
-Problem lists and searches open as an embedded table reader when input and output
-are attached to a terminal at least 80 columns wide. The table uses 60% of the live
-terminal width. Use Up and Down to move, move above the first row to focus the
-headers, Left and Right to choose a column, and Enter to toggle its sort direction.
-Enter on a row opens that problem. Mouse wheels, row clicks and column-header clicks
-work in terminals with mouse reporting. Escape, `q` and Ctrl-C close the reader
-immediately. JSON, redirected output and narrow terminals keep the static table
-output. Problem statements remain in normal scrollback at a reading width capped at
-100 columns.
-
-LaTeX between `$…$`, `$$…$$`, `\(…\)` and `\[…\]` renders as Unicode math,
-including stacked fractions, roots, scripts and matrices. It works in both
-Apple Terminal and Windows Terminal without a browser, graphics protocol or
-external TeX installation. Multiline equations get their own block; unsupported,
-oversized or malformed expressions remain readable as their original LaTeX.
-This is terminal typesetting, not pixel-perfect TeX. Code examples preserve
-literal math delimiters. Images are shown as descriptions and links without
-fetching their contents. Your terminal font must include the displayed Unicode
-characters.
-
-Use `--help`, `problem --help` or a command's `--help`; there is no `help`
-subcommand.
-
-Problem JSON contains `id` (the slug), `title` and `statement` (HTML). Search JSON
-contains `query`, `total` and compact `results`; list JSON contains its active
-filters, `total` and the same compact results. Diagnostics go to stderr. Invalid
-arguments exit with status 2; request and output failures exit with status 1.
-Closing an output pipe early exits successfully.
+Problem JSON has `id` (slug), `title`, and HTML `statement`. Search JSON has `query`, `total`, and compact `results`; list JSON adds active filters. Diagnostics use stderr. Invalid arguments exit 2; request or output failures exit 1; a closed output pipe exits successfully.
 
 ### Authentication
 
-Public browsing and starter retrieval never send cookies. LeetCode does not expose OAuth,
-a device callback or another documented terminal-native login contract, so
-`cp-cli auth login` returns an explicit unavailable-capability error and opens nothing.
-cp-cli does not proxy credentials, read a browser profile or copy browser cookies.
+Public browsing and starter retrieval never send cookies. LeetCode has no documented OAuth, device callback, or terminal-native login contract; `cp-cli auth login` returns an unavailable-capability error and opens nothing. `auth status` validates active credentials. `LEETCODE_SESSION` plus `LEETCODE_CSRFTOKEN` (or `LEETCODE_CSRF_TOKEN`) take precedence over secure storage; on headless Linux without Secret Service, use environment variables. `auth logout` removes only compatible cp-cli credential records and cannot clear parent-shell variables.
 
-`cp-cli auth status` validates the active credentials. For automation,
-`LEETCODE_SESSION` plus `LEETCODE_CSRFTOKEN` (or `LEETCODE_CSRF_TOKEN`) remain supported
-and take precedence over secure storage. On headless Linux without Secret Service, use
-the environment variables.
-
-`cp-cli auth logout` removes only a compatible credential record saved by an earlier
-cp-cli version. It cannot clear the parent shell's environment variables.
-
-Codeforces uses its documented API-key flow. Run
-`cp-cli --platform codeforces auth login`; cp-cli accepts a preissued key and secret
-with hidden secret input, verifies the exact signed
-`user.friends` request, then stores one record in the operating system credential store.
-For automation, `CODEFORCES_API_KEY` and `CODEFORCES_API_SECRET` take precedence.
-
-Exercism uses its official CLI configuration. Run
-`cp-cli --platform exercism auth login`; cp-cli accepts a preissued token with hidden input
-and invokes `exercism configure --token`. If the official CLI is missing, the error says
-exactly which executable is required.
-
-### Config
-
-### Shell completions
+`cp-cli --platform codeforces auth login` accepts a preissued key and hidden secret, verifies the exact signed `user.friends` request, and stores one record in the operating-system credential store. `CODEFORCES_API_KEY` and `CODEFORCES_API_SECRET` take precedence. `cp-cli --platform exercism auth login` accepts a hidden preissued token and runs `exercism configure --token`; an absent CLI reports the required executable.
 
 ## Development
 
@@ -368,32 +136,15 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo fmt --all -- --check
 ```
 
-The client uses Reqwest with Rustls for HTTPS, `htmd` and `pulldown-cmark-mdcat`
-for Markdown, and `term-maths` for built-in Unicode math. Requests have connection,
-read and total timeouts, do not follow
-redirects or retry, and accept at most 2 MiB of response data. Tests use a local
-HTTP server and do not contact LeetCode. Syntax definitions load only for colored
-code blocks with a language tag; plain examples and JSON avoid that allocation.
-
-Build without LeetCode using `--no-default-features`; LeetCode commands then
-report that the platform feature is disabled.
+cp-cli uses Reqwest with Rustls, `htmd`, `pulldown-cmark-mdcat`, and `term-maths`. Requests have connection, read, and total timeouts; do not follow redirects or retry; and accept at most 2 MiB. Tests use a local HTTP server and do not contact LeetCode. Syntax definitions load only for coloured code blocks with a language tag. Build without LeetCode using `--no-default-features`; its commands then report the platform feature is disabled.
 
 ## Security
 
-Do not open a public issue containing:
-- Session cookies or authentication tokens
-- Account credentials
-- Private submission data
-- A working exploit for an unpatched vulnerability
-- Sensitive request or response logs
+Do not open a public issue with session cookies or authentication tokens, account credentials, private submission data, a working exploit for an unpatched vulnerability, or sensitive request/response logs. Follow [SECURITY.md](docs/SECURITY.md) for private reporting.
 
-Follow the private reporting instructions in [SECURITY.md](SECURITY.md).
+## Contributing and license
 
-## Contributing
-
-Bug fixes, documentation improvements, tests, and focused feature additions are welcome.
-
-Before opening a pull request:
+Before a pull request, run:
 
 ```sh
 cargo fmt --all -- --check
@@ -401,8 +152,4 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```
 
-Read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for the complete development and review process.
-
-## License
-
-Licensed under the [MIT License](LICENSE)
+Bug fixes, documentation, tests, and focused features are welcome; [CONTRIBUTING.md](docs/CONTRIBUTING.md) has the review process. Licensed under the [MIT License](LICENSE).

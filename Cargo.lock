@@ -620,7 +620,7 @@ dependencies = [
  "indicatif",
  "keyring",
  "markup5ever_rcdom",
- "pulldown-cmark",
+ "pulldown-cmark 0.13.4",
  "pulldown-cmark-mdcat",
  "ratex-parser",
  "serde",
@@ -2080,6 +2080,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-cmark"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+dependencies = [
+ "bitflags 2.13.2",
+ "memchr",
+ "unicase",
+]
+
+[[package]]
 name = "pulldown-cmark-mdcat"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2090,7 +2101,7 @@ dependencies = [
  "gethostname",
  "mime",
  "png 0.18.1",
- "pulldown-cmark",
+ "pulldown-cmark 0.12.2",
  "ratex-layout",
  "ratex-parser",
  "ratex-render",

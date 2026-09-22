@@ -1,17 +1,24 @@
-<div align="center">
+<h1 align="center">cp-cli</h1>
 
-# cp-cli
+<p align="center">
+  <a href="https://crates.io/crates/cp-cli"><img alt="Crates.io version" src="https://img.shields.io/crates/v/cp-cli.svg"></a>
+  <a href="https://crates.io/crates/cp-cli"><img alt="Crates.io downloads" src="https://img.shields.io/crates/d/cp-cli.svg"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/keys-i/cp-cli"></a>
+  <a href="https://github.com/keys-i/cp-cli/actions/workflows/checks.yml"><img alt="Checks status" src="https://github.com/keys-i/cp-cli/actions/workflows/checks.yml/badge.svg?branch=main"></a>
+</p>
 
-[![Crates.io](https://img.shields.io/crates/v/cp-cli.svg)](https://crates.io/crates/cp-cli)
-[![Downloads](https://img.shields.io/crates/d/cp-cli.svg)](https://crates.io/crates/cp-cli)
-[![License](https://img.shields.io/github/license/keys-i/cp-cli)](LICENSE)
-[![Checks](https://github.com/keys-i/cp-cli/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/keys-i/cp-cli/actions/workflows/checks.yml)
+<p align="center">
+  <a href="#installation">Install</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="docs/CHANGELOG.md">Changelog</a> ·
+  <a href="docs/CONTRIBUTING.md">Contributing</a> ·
+  <a href="docs/SECURITY.md">Security</a>
+</p>
 
-[Install](#installation) · [Usage](#usage) · [Configuration](#configuration) ·
-[Changelog](docs/CHANGELOG.md) · [Contributing](docs/CONTRIBUTING.md) ·
-[Security](docs/SECURITY.md)
-
-</div>
+<p align="center">
+  <img src="docs/assets/cp-cli-poster.png" alt="A possum coding at a terminal beside the cp-cli install command" width="100%">
+</p>
 
 > [!NOTE]
 > cp-cli is not affiliated with or endorsed by LeetCode, HackerRank, Codeforces,

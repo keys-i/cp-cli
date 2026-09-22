@@ -38,25 +38,31 @@ fn render_frame(pose: Pose, columns: u16, color: bool, alive: bool) -> Option<St
         let last = (0..width)
             .rposition(|x| pixel(pose, source_y, x * WIDTH / width) != 0)
             .unwrap_or_default();
-        let mut previous = (0, false);
+        let mut previous = (0, 0);
         for x in 0..=last {
             let source_x = x * WIDTH / width;
             let value = pixel(pose, source_y, source_x);
             let color = usize::from(value >> 4);
-            let blink = alive && eye(source_y, source_x);
-            if (color, blink) != previous {
+            let motion = if alive && eye(source_y, source_x) {
+                5
+            } else if alive && matches!(pose, Pose::Scratch) && itch(source_y, source_x) {
+                6
+            } else {
+                0
+            };
+            if (color, motion) != previous {
                 if color == 0 {
                     output.push_str("\x1b[0m");
-                } else if blink {
-                    let _ = write!(output, "\x1b[0;5;38;5;{}m", PALETTE[color]);
+                } else if motion > 0 {
+                    let _ = write!(output, "\x1b[0;{motion};38;5;{}m", PALETTE[color]);
                 } else {
                     let _ = write!(output, "\x1b[0;38;5;{}m", PALETTE[color]);
                 }
-                previous = (color, blink);
+                previous = (color, motion);
             }
             output.push(GLYPHS[usize::from(value & 0x0f)]);
         }
-        if previous != (0, false) {
+        if previous != (0, 0) {
             output.push_str("\x1b[0m");
         }
         if y + 1 != height {
@@ -68,6 +74,10 @@ fn render_frame(pose: Pose, columns: u16, color: bool, alive: bool) -> Option<St
 
 fn eye(y: usize, x: usize) -> bool {
     matches!((y, x), (5, 31 | 37) | (6, 31 | 32 | 37))
+}
+
+fn itch(y: usize, x: usize) -> bool {
+    (2..=8).contains(&y) && x >= 34 && pixel(Pose::Scratch, y, x) != pixel(Pose::Cursor, y, x)
 }
 
 pub(crate) fn loading_frames(columns: u16, color: bool, motion: bool) -> Vec<String> {
@@ -88,13 +98,13 @@ pub(crate) fn loading_frames(columns: u16, color: bool, motion: bool) -> Vec<Str
     let scratch = render(Pose::Scratch, width, color).unwrap_or_else(|| idle.clone());
     vec![
         idle.clone(),
-        idle.clone(),
         blink,
-        idle.clone(),
-        idle.clone(),
         idle.clone(),
         scratch.clone(),
         scratch,
+        idle.clone(),
+        idle.clone(),
+        idle.clone(),
         idle.clone(),
         idle,
     ]

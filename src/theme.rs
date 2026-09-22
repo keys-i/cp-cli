@@ -60,22 +60,23 @@ impl Theme {
     pub(crate) fn palette(self, background: [u8; 3]) -> Palette {
         let light = luminance(background) > 0.179;
         let (gradient, accent, code) = match (self, light) {
-            (Self::Possum, false) => ([252, 252, 251, 251], 181, 250),
-            (Self::Possum, true) => ([238, 238, 239, 239], 95, 239),
-            (Self::Arcade, false) => ([51, 87, 201, 198], 51, 250),
-            (Self::Arcade, true) => ([24, 25, 90, 89], 25, 239),
-            (Self::Moonlight, false) => ([252, 252, 251, 251], 110, 250),
-            (Self::Moonlight, true) => ([238, 238, 239, 239], 24, 239),
-            (Self::Phosphor, false) => ([252, 252, 251, 251], 108, 250),
-            (Self::Phosphor, true) => ([238, 238, 239, 239], 28, 239),
-            (Self::Amber, false) => ([252, 252, 251, 251], 179, 250),
-            (Self::Amber, true) => ([238, 238, 239, 239], 94, 239),
-            (_, false) => ([252, 252, 251, 251], 250, 250),
-            (_, true) => ([238, 238, 239, 239], 239, 239),
+            (Self::Possum, false) => ([252, 252, 251, 251], 181, 110),
+            (Self::Possum, true) => ([238, 238, 239, 239], 95, 24),
+            (Self::Arcade, false) => ([51, 87, 201, 198], 51, 87),
+            (Self::Arcade, true) => ([24, 25, 90, 89], 25, 24),
+            (Self::Moonlight, false) => ([252, 252, 251, 251], 110, 181),
+            (Self::Moonlight, true) => ([238, 238, 239, 239], 24, 95),
+            (Self::Phosphor, false) => ([252, 252, 251, 251], 108, 151),
+            (Self::Phosphor, true) => ([238, 238, 239, 239], 28, 22),
+            (Self::Amber, false) => ([252, 252, 251, 251], 179, 223),
+            (Self::Amber, true) => ([238, 238, 239, 239], 94, 58),
+            (_, false) => ([252, 252, 251, 251], 250, 110),
+            (_, true) => ([238, 238, 239, 239], 239, 24),
         };
         let background = luminance(background);
         let gradient = gradient.map(|color| readable(color, background));
         let accent = readable(accent, background);
+        let code = readable_distinct(code, background, accent);
         let result_title = gradient
             .into_iter()
             .find(|color| *color != accent)
@@ -84,8 +85,8 @@ impl Theme {
         Palette {
             gradient,
             accent,
-            code: readable(code, background),
-            math: readable(code, background),
+            code,
+            math: accent,
             link: accent,
             result_number: accent,
             result_title,
@@ -237,6 +238,7 @@ fn palettes_follow_profile_contrast() {
                 assert!(contrast(luminance(rgb(color)), luminance(background)) >= 4.5);
             }
             assert_ne!(palette.result_number, palette.result_title);
+            assert_ne!(palette.accent, palette.code);
         }
     }
 }

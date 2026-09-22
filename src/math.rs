@@ -41,6 +41,20 @@ pub(crate) fn events(text: &str, columns: u16, in_table: bool) -> Vec<Event<'sta
     events
 }
 
+pub(crate) fn inline_text(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    for event in events(text, u16::MAX, true) {
+        match event {
+            Event::Text(value)
+            | Event::Code(value)
+            | Event::InlineMath(value)
+            | Event::DisplayMath(value) => output.push_str(&value),
+            _ => {}
+        }
+    }
+    output
+}
+
 fn opening(text: &str) -> Option<(usize, &'static str, &'static str)> {
     let mut characters = text.char_indices();
     while let Some((index, ch)) = characters.next() {

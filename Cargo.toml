@@ -11,6 +11,7 @@ workspace = true
 members = [
     "platforms/codechef",
     "platforms/codeforces",
+    "platforms/hackerearth",
     "platforms/hackerrank",
     "platforms/leetcode",
     "platforms/project-euler",
@@ -38,17 +39,19 @@ thiserror = "2"
 url = "2"
 
 [features]
-default = ["codechef", "codeforces", "hackerrank", "leetcode", "project-euler"]
+default = ["codechef", "codeforces", "hackerearth", "hackerrank", "leetcode", "project-euler"]
 codechef = ["dep:platform-codechef"]
-codeforces = ["dep:platform-codeforces"]
+codeforces = ["dep:keyring", "dep:platform-codeforces"]
 hackerrank = ["dep:platform-hackerrank"]
-leetcode = ["dep:keyring", "dep:muda", "dep:platform-leetcode", "dep:tao", "dep:thirtyfour", "dep:wry"]
+hackerearth = ["dep:platform-hackerearth"]
+leetcode = ["dep:keyring", "dep:platform-leetcode"]
 project-euler = ["dep:platform-project-euler"]
 
 [dependencies]
 anstream = "1"
 anstyle = "1"
 clap = { version = "4", features = ["derive"] }
+console = "0.16.6"
 crossterm = { version = "0.29", default-features = false, features = ["events", "windows"] }
 htmd = "0.5.5"
 indicatif = { version = "0.18", default-features = false, features = ["unicode-width"] }
@@ -72,18 +75,9 @@ tokio = { version = "1", default-features = false, features = ["macros", "rt", "
 platform-codeforces = { path = "platforms/codeforces", optional = true }
 platform-codechef = { path = "platforms/codechef", optional = true }
 platform-hackerrank = { path = "platforms/hackerrank", optional = true }
+platform-hackerearth = { path = "platforms/hackerearth", optional = true }
 platform-leetcode = { path = "platforms/leetcode", optional = true }
 platform-project-euler = { path = "platforms/project-euler", optional = true }
-
-[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
-tao = { version = "0.37", default-features = false, features = ["rwh_06"], optional = true }
-wry = { version = "0.57", default-features = false, optional = true }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-muda = { version = "0.19.3", default-features = false, optional = true }
-
-[target.'cfg(not(any(target_os = "macos", target_os = "windows")))'.dependencies]
-thirtyfour = { version = "0.37.5", default-features = false, features = ["manager", "rustls"], optional = true }
 
 [profile.release]
 opt-level = 3

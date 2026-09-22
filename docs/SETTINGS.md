@@ -38,7 +38,16 @@ A maintainer must create the GitHub Release directly and attach the verified bun
 Retrospective tags through `v3.1.7` stay outside the workflow as metadata-only releases without
 binaries.
 
-Before the first automated release, publish these workspace crates manually, in order:
+Before the first automated release, publish the workspace history with:
+
+```sh
+python3 .github/workflows/scripts/publish-crates.py --history --yank-incomplete-3-1-8
+```
+
+The command resumes safely, waits for crates.io's stated retry time after HTTP 429, and
+publishes corrected platform packages before the `cp-cli` version sequence. It yanks the five
+platform `3.1.8` archives created before package READMEs were added only after their replacements
+and the complete `cp-cli` history are available.
 
 1. `cp-cli-platform-codechef`
 2. `cp-cli-platform-codeforces`

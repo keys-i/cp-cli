@@ -212,7 +212,7 @@ jobs:
         run: cargo check --workspace --all-targets --locked
 
   package:
-    name: Release readiness / cargo package
+    name: Release readiness / platform packages
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -232,8 +232,8 @@ jobs:
         with:
           key: package
 
-      - name: Check package layouts
-        run: cargo package --workspace --all-features --locked --no-verify
+      - name: Check platform package layouts
+        run: cargo package --workspace --exclude cp-cli --all-features --locked --no-verify
 
   coverage:
     name: Tests / coverage

@@ -1,9 +1,9 @@
 [package]
 name = "cp-cli-platform-leetcode"
-version = "0.2.0"
+version = "3.1.8"
 description = "LeetCode HTTP client used by cp-cli"
 readme = false
-homepage = "https://github.com/keys-i/leetcode-rs"
+homepage = "https://github.com/keys-i/cp-cli"
 keywords = ["leetcode", "competitive-coding", "api-client"]
 categories = ["api-bindings", "web-programming::http-client"]
 include = ["/src/**", "/Cargo.toml"]

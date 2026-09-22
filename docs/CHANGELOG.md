@@ -1,13 +1,12 @@
 # Changelog
 
-This is a retrospective record of cp-cli's product milestones. Versions before `3.1.8` mark
-when a capability landed; they do not imply a published binary or crate. `3.1.8` is the first
-release from the current pipeline.
+This records the version assigned to each cp-cli product milestone. Versions through `3.1.8`
+were reconstructed for the initial registry backfill. `3.1.9` begins source-matched releases.
 
 New commands and platform support advance the minor version; corrections advance the patch.
 Minor versions follow the project's decimal sequence, so `0.9.0` precedes `1.0.0`.
 
-| Version | Retrospective change |
+| Version | Change |
 | --- | --- |
 | `0.1.0` | Established the LeetCode `problem show` baseline |
 | `0.1.1` | Added usable terminal text scaling |
@@ -69,3 +68,4 @@ Minor versions follow the project's decimal sequence, so `0.9.0` precedes `1.0.0
 | `3.1.6` | Added release checksum verification and provenance |
 | `3.1.7` | Added native Windows installer coverage |
 | `3.1.8` | Unified repository governance, tooling layout, and canonical release URLs |
+| `3.1.9` | Added packaged documentation and resumable crates.io publishing |

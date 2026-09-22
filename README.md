@@ -39,7 +39,7 @@ curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO https://github.com
 sh install.sh
 ```
 
-Use `--version 3.1.8` for a specific release or `--install-dir <DIRECTORY>` for another
+Use `--version 3.1.9` for a specific release or `--install-dir <DIRECTORY>` for another
 location. The installer reports when the directory must be added to `PATH`.
 
 ### Windows
@@ -52,7 +52,7 @@ Invoke-WebRequest https://github.com/keys-i/cp-cli/releases/latest/download/inst
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\cp-cli-install.ps1"
 ```
 
-Add `-Version 3.1.8` or `-InstallDir <DIRECTORY>` after the script path. The process-scoped
+Add `-Version 3.1.9` or `-InstallDir <DIRECTORY>` after the script path. The process-scoped
 execution-policy flag does not change the machine policy.
 
 ### Manual archives

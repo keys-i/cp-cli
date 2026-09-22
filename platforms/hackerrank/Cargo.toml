@@ -1,12 +1,12 @@
 [package]
 name = "cp-cli-platform-hackerrank"
-version = "3.1.8"
+version = "3.1.9"
 description = "HackerRank HTTP client used by cp-cli"
-readme = false
+readme = "README.md"
 homepage = "https://github.com/keys-i/cp-cli"
 keywords = ["hackerrank", "competitive-coding", "api-client"]
 categories = ["api-bindings", "web-programming::http-client"]
-include = ["/src/**", "/Cargo.toml"]
+include = ["/src/**", "/Cargo.toml", "/README.md"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

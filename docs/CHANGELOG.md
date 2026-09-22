@@ -1,14 +1,11 @@
 # Changelog
 
-This ledger reconstructs cp-cli's release milestones from the available source history and
-product record. Releases before `3.1.8` are metadata-only historical markers: they describe
-when a capability entered the product, but they do not claim that a matching binary or crate
-was published at that time. `3.1.8` is the first release built from the current release
-pipeline.
+This is a retrospective record of cp-cli's product milestones. Versions before `3.1.8` mark
+when a capability landed; they do not imply a published binary or crate. `3.1.8` is the first
+release from the current pipeline.
 
-The project version advances by one minor step for each command or platform addition and by
-one patch step for each distinct correction. Minor steps use the project's decimal sequence,
-so `0.9.0` is followed by `1.0.0`.
+New commands and platform support advance the minor version; corrections advance the patch.
+Minor versions follow the project's decimal sequence, so `0.9.0` precedes `1.0.0`.
 
 | Version | Retrospective change |
 | --- | --- |

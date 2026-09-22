@@ -1,16 +1,16 @@
 # Summary
 
-<!-- Describe the cp-cli change and the user-facing result -->
+<!-- What changed for users? -->
 
 Closes #
 
 ## Compatibility
 
-<!-- Note changed commands, output, configuration, platform behaviour, or migration; write "None" when not applicable -->
+<!-- Commands, output, config, platform behaviour, or migration. Write "None" if unchanged. -->
 
 ## Verification
 
-<!-- Include commands run and relevant results -->
+<!-- Commands run and relevant results -->
 
 ```sh
 cargo fmt --all -- --check
@@ -20,6 +20,6 @@ cargo test --workspace --all-targets --all-features --locked
 
 ## Checklist
 
-- [ ] The change is focused and documented where users need it
-- [ ] Tests cover changed behaviour or the reason they are unnecessary is stated above
-- [ ] No secrets, sessions, or private vulnerability details are included
+- [ ] Focused change; user docs updated where needed
+- [ ] Tests cover changed behaviour, or the reason they are unnecessary is above
+- [ ] No secrets, sessions, or private vulnerability details

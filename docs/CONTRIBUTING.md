@@ -1,17 +1,17 @@
 # Contributing
 
-Thank you for improving `cp-cli`, the Rust CLI for working with coding problems from the terminal.
+Thanks for improving `cp-cli`.
 
 ## Before you start
 
-- Report a suspected vulnerability privately by following [SECURITY.md](SECURITY.md); use the public security form only for safe hardening ideas.
-- Open an issue before substantial commands, platform support, dependencies, or behaviour changes.
-- Keep a pull request focused. Small fixes and documentation corrections can go directly to a pull request.
-- Never include sessions, cookies, API keys, personal data, or undisclosed vulnerability details in public issues or pull requests.
+- Report vulnerabilities privately through [SECURITY.md](SECURITY.md). Use public reports only for safe hardening ideas.
+- Discuss substantial commands, platform support, dependencies, or behaviour changes in an issue first.
+- Small fixes and doc corrections can go straight to a focused pull request.
+- Never publish sessions, cookies, API keys, personal data, or undisclosed vulnerability details.
 
 ## Development
 
-Install Rust 1.88 or newer, then build and run the CLI from this checkout:
+Install Rust 1.88+, then build and run:
 
 ```sh
 cargo build --release --locked
@@ -26,11 +26,11 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 ```
 
-Add focused tests for behaviour changes and update the README or relevant `docs/` page when a command, output, configuration option, or platform capability changes.
+Add focused tests for behaviour changes. Update the README or relevant docs when commands, output, configuration, or platform support change.
 
 ## Pull requests
 
-Describe the user-visible change, the commands you ran, and any compatibility or platform limitations. Keep commits and pull requests reviewable; avoid unrelated formatting, generated files, and dependency updates.
+Say what changed for users, what you ran, and any compatibility or platform limits. Keep the diff reviewable; leave unrelated formatting, generated files, and dependency updates out.
 
 ## Licence
 

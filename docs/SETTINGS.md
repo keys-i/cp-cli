@@ -1,10 +1,10 @@
 # Required repository settings
 
-These settings are configured in GitHub and cannot be enforced by a tracked file.
+Configure these in GitHub; tracked files cannot enforce them.
 
 ## Main branch protection
 
-Apply the following rules to `main`:
+Apply to `main`:
 
 - Require a pull request before merging
 - Require one approving review and dismiss stale approvals when new commits are pushed
@@ -24,11 +24,11 @@ Apply the following rules to `main`:
 
 ## Release publishing
 
-The release workflow uses crates.io trusted publishing through OpenID Connect, so it does not need a long-lived crates.io credential. It builds and attests the native archives, then uploads one verified release bundle as a workflow artifact. It has read-only repository contents permission and never creates a GitHub Release.
+The release workflow uses crates.io trusted publishing through OpenID Connect, with no long-lived crates.io credential. It builds and attests native archives, then uploads one verified release bundle as a workflow artifact. It has read-only repository-contents permission and never creates a GitHub Release.
 
-A maintainer creates the GitHub Release directly and attaches the verified bundle after the workflow succeeds. Retrospective tags through `v3.1.7` are excluded from the workflow and remain metadata-only releases without binaries.
+A maintainer must create the GitHub Release directly and attach the verified bundle after the workflow succeeds. Retrospective tags through `v3.1.7` stay outside the workflow as metadata-only releases without binaries.
 
-Before the first automated release, publish the workspace crates manually in this order:
+Before the first automated release, publish these workspace crates manually, in order:
 
 1. `cp-cli-platform-codechef`
 2. `cp-cli-platform-codeforces`
@@ -38,6 +38,6 @@ Before the first automated release, publish the workspace crates manually in thi
 6. `cp-cli-platform-project-euler`
 7. `cp-cli`
 
-For each crate, configure a crates.io trusted publisher with owner `keys-i`, repository `cp-cli`, workflow `release.yml`, and environment `release`.
+For each crate, configure a crates.io trusted publisher: owner `keys-i`, repository `cp-cli`, workflow `release.yml`, environment `release`.
 
 Protect the GitHub `release` environment with a required reviewer and a deployment rule that permits version tags only.

@@ -180,10 +180,8 @@ jobs:
     needs:
       - verify
       - build
-      - publish
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    environment: release
     permissions:
       attestations: write
       contents: read

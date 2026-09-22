@@ -29,10 +29,11 @@ The release workflow uses crates.io trusted publishing through OpenID Connect. I
 long-lived crates.io credential.
 
 It builds and attests native archives, then uploads one verified release bundle as a workflow
-artifact. It has read-only repository-contents permission and never creates a GitHub Release.
+artifact. This bundle does not wait for crates.io publishing. The workflow has read-only
+repository-contents permission and never creates a GitHub Release.
 
 A maintainer must create the GitHub Release directly and attach the verified bundle after the
-workflow succeeds.
+`Prepare release bundle` job succeeds.
 
 Retrospective tags through `v3.1.7` stay outside the workflow as metadata-only releases without
 binaries.

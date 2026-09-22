@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*"
+      - "!v0.*"
+      - "!v1.*"
+      - "!v2.*"
+      - "!v3.0.*"
+      - "!v3.1.[0-7]"
 
 permissions: {}
 
@@ -36,25 +41,7 @@ jobs:
         id: version
         env:
           TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
-          version="$(jq -er '.packages[] | select(.name == "cp-cli") | .version' <<<"$metadata")"
-          test "$TAG" = "v$version"
-
-          for package in \
-            cp-cli-platform-codechef \
-            cp-cli-platform-codeforces \
-            cp-cli-platform-hackerearth \
-            cp-cli-platform-hackerrank \
-            cp-cli-platform-leetcode \
-            cp-cli-platform-project-euler; do
-            package_version="$(jq -er --arg package "$package" \
-              '.packages[] | select(.name == $package) | .version' <<<"$metadata")"
-            test "$package_version" = "$version"
-          done
-
-          echo "value=$version" >> "$GITHUB_OUTPUT"
+        run: bash .github/workflows/scripts/verify-release-tag.sh
 
       - name: Check package layouts
         run: cargo package --workspace --locked --no-verify
@@ -124,35 +111,24 @@ jobs:
       - name: Build cp-cli
         run: cargo build --release --locked --target "${{ matrix.target }}" --package cp-cli
 
-      - name: Package Unix archive
+      - name: Package and verify Unix archive
         id: package_unix
         if: matrix.archive == 'tar.gz'
         env:
           EXECUTABLE: ${{ matrix.executable }}
           TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          archive="cp-cli-${TARGET}.tar.gz"
-          mkdir -p dist/package
-          cp "target/${TARGET}/release/${EXECUTABLE}" "dist/package/${EXECUTABLE}"
-          cp README.md LICENSE dist/package/
-          tar -C dist/package -czf "dist/${archive}" "$EXECUTABLE" README.md LICENSE
-          echo "path=dist/${archive}" >> "$GITHUB_OUTPUT"
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: bash .github/workflows/scripts/package-release-unix.sh
 
-      - name: Package Windows archive
+      - name: Package and verify Windows archive
         id: package_windows
         if: matrix.archive == 'zip'
         shell: pwsh
         env:
           EXECUTABLE: ${{ matrix.executable }}
           TARGET: ${{ matrix.target }}
-        run: |
-          $archive = "cp-cli-$env:TARGET.zip"
-          New-Item -ItemType Directory -Force -Path dist/package | Out-Null
-          Copy-Item "target/$env:TARGET/release/$env:EXECUTABLE" "dist/package/$env:EXECUTABLE"
-          Copy-Item README.md, LICENSE dist/package/
-          Compress-Archive -Path dist/package/* -DestinationPath "dist/$archive"
-          "path=dist/$archive" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: .github/workflows/scripts/package-release-windows.ps1
 
       - name: Attest release archive
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.1.0
@@ -197,35 +173,10 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates_io_auth.outputs.token }}
           VERSION: ${{ needs.verify.outputs.version }}
-        run: |
-          set -euo pipefail
-          for package in \
-            cp-cli-platform-codechef \
-            cp-cli-platform-codeforces \
-            cp-cli-platform-hackerearth \
-            cp-cli-platform-hackerrank \
-            cp-cli-platform-leetcode \
-            cp-cli-platform-project-euler \
-            cp-cli; do
-            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-              --user-agent "cp-cli-release/${VERSION} (https://github.com/${GITHUB_REPOSITORY})" \
-              "https://crates.io/api/v1/crates/${package}/${VERSION}")"
-            case "$status" in
-              200)
-                echo "${package} ${VERSION} is already published"
-                ;;
-              404)
-                cargo publish --locked --package "$package"
-                ;;
-              *)
-                echo "crates.io returned HTTP ${status} for ${package} ${VERSION}" >&2
-                exit 1
-                ;;
-            esac
-          done
+        run: bash .github/workflows/scripts/publish-crates.sh
 
-  release:
-    name: Publish release assets
+  bundle:
+    name: Prepare release bundle
     needs:
       - verify
       - build
@@ -235,9 +186,14 @@ jobs:
     environment: release
     permissions:
       attestations: write
-      contents: write
+      contents: read
       id-token: write
     steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Download release archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -245,30 +201,30 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Add native installers
+        run: cp tools/scripts/install.sh tools/scripts/install.ps1 dist/
+
       - name: Write SHA-256 checksums
         run: |
           set -euo pipefail
           cd dist
-          shasum -a 256 ./*.tar.gz ./*.zip > SHA256SUMS
+          shasum -a 256 cp-cli-*.tar.gz cp-cli-*.zip install.sh install.ps1 > SHA256SUMS
+          shasum -a 256 --check SHA256SUMS
 
       - name: Attest release checksums
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.1.0
         with:
           subject-checksums: dist/SHA256SUMS
 
-      - name: Create or update the GitHub release
-        env:
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-          VERSION: ${{ needs.verify.outputs.version }}
-        run: |
-          set -euo pipefail
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --clobber
-          else
-            gh release create "$TAG" dist/* \
-              --verify-tag \
-              --title "cp-cli $VERSION" \
-              --generate-notes
-          fi
+      - name: Upload release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cp-cli-release-bundle
+          path: |
+            dist/cp-cli-*.tar.gz
+            dist/cp-cli-*.zip
+            dist/install.sh
+            dist/install.ps1
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7

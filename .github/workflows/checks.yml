@@ -1,4 +1,3 @@
-# -=- Optimised checks for Cargo -=-
 name: Checks
 
 on:
@@ -46,20 +45,7 @@ jobs:
 
       - name: Read MSRV from Cargo.toml
         id: manifest
-        run: |
-          python3 <<'PY'
-          import os
-          import tomllib
-          from pathlib import Path
-
-          manifest = tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))
-          package = manifest.get("package", {})
-          workspace_package = manifest.get("workspace", {}).get("package", {})
-          msrv = package.get("rust-version") or workspace_package.get("rust-version") or ""
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              print(f"msrv={msrv}", file=output)
-          PY
+        run: python3 .github/workflows/scripts/read-msrv.py
 
   quality:
     name: Quality / ${{ matrix.label }}
@@ -162,6 +148,19 @@ jobs:
       - name: Run tests with all features
         if: matrix.all_features == true
         run: cargo nextest run --workspace --all-targets --all-features --locked
+
+      - name: Test Unix installer
+        if: runner.os != 'Windows' && matrix.all_features == false
+        run: |
+          sh -n tools/scripts/install.sh tools/scripts/test-install.sh
+          tools/scripts/test-install.sh
+
+      - name: Test Windows installer
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          cargo build --package cp-cli --locked
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/scripts/test-install.ps1 -BinaryPath target/debug/cp-cli.exe
 
   doctests:
     name: Tests / doctests
@@ -328,16 +327,7 @@ jobs:
 
       - name: Add benchmark output to the job summary
         if: always()
-        run: |
-          if [[ -f benchmark-output.txt ]]; then
-            {
-              echo "## Benchmark output"
-              echo
-              echo '```text'
-              tail -n 200 benchmark-output.txt
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+        run: bash .github/workflows/scripts/summarize-benchmarks.sh
 
       - name: Upload benchmark results
         if: always()
@@ -405,25 +395,4 @@ jobs:
           PACKAGE_RESULT: ${{ needs.package.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
           BENCH_COMPILE_RESULT: ${{ needs['bench-compile'].result }}
-        run: |
-          required_results=(
-            "$METADATA_RESULT"
-            "$QUALITY_RESULT"
-            "$TESTS_RESULT"
-            "$DOCTESTS_RESULT"
-            "$PACKAGE_RESULT"
-            "$COVERAGE_RESULT"
-            "$BENCH_COMPILE_RESULT"
-          )
-
-          for result in "${required_results[@]}"; do
-            if [[ "$result" != "success" ]]; then
-              echo "A required job finished with result: $result" >&2
-              exit 1
-            fi
-          done
-
-          if [[ "$MSRV_RESULT" != "success" && "$MSRV_RESULT" != "skipped" ]]; then
-            echo "The MSRV job finished with result: $MSRV_RESULT" >&2
-            exit 1
-          fi
+        run: bash .github/workflows/scripts/verify-required-checks.sh

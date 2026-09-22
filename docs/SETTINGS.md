@@ -20,13 +20,22 @@ Apply to `main`:
 - Enable private vulnerability reporting and use the repository's security advisory form
 - Enable Dependabot version and security updates
 - Enable secret scanning and push protection where available
-- Register the repository with the Core Infrastructure Initiative Best Practices badge program before adding its badge
+- Register the repository with the Core Infrastructure Initiative Best Practices badge program
+  before adding its badge
 
 ## Release publishing
 
-The release workflow uses crates.io trusted publishing through OpenID Connect, with no long-lived crates.io credential. It builds and attests native archives, then uploads one verified release bundle as a workflow artifact. It has read-only repository-contents permission and never creates a GitHub Release.
+The release workflow uses crates.io trusted publishing through OpenID Connect. It needs no
+long-lived crates.io credential.
 
-A maintainer must create the GitHub Release directly and attach the verified bundle after the workflow succeeds. Retrospective tags through `v3.1.7` stay outside the workflow as metadata-only releases without binaries.
+It builds and attests native archives, then uploads one verified release bundle as a workflow
+artifact. It has read-only repository-contents permission and never creates a GitHub Release.
+
+A maintainer must create the GitHub Release directly and attach the verified bundle after the
+workflow succeeds.
+
+Retrospective tags through `v3.1.7` stay outside the workflow as metadata-only releases without
+binaries.
 
 Before the first automated release, publish these workspace crates manually, in order:
 
@@ -38,6 +47,12 @@ Before the first automated release, publish these workspace crates manually, in 
 6. `cp-cli-platform-project-euler`
 7. `cp-cli`
 
-For each crate, configure a crates.io trusted publisher: owner `keys-i`, repository `cp-cli`, workflow `release.yml`, environment `release`.
+For each crate, configure a crates.io trusted publisher:
 
-Protect the GitHub `release` environment with a required reviewer and a deployment rule that permits version tags only.
+- owner: `keys-i`
+- repository: `cp-cli`
+- workflow: `release.yml`
+- environment: `release`
+
+Protect the GitHub `release` environment with a required reviewer and a deployment rule that
+permits version tags only.

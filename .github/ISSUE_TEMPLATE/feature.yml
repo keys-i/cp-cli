@@ -1,37 +1,69 @@
-# == my standard template for feature ==
 name: Feature request
-description: Suggest reusable material interaction behaviour.
+description: Suggest a focused cp-cli improvement.
 title: "[FEATURE]: "
 body:
   - type: input
     id: summary
     attributes:
       label: Summary
-      placeholder: Add a low-power material response mode.
+      placeholder: Add a bounded JSON view for contest results
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: cp-cli version
+      description: Include `cp-cli --version` or the commit you built.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS and terminal
+      placeholder: Ubuntu 24.04, tmux 3.4
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - LeetCode
+        - HackerRank
+        - Codeforces
+        - Exercism
+        - Project Euler
+        - HackerEarth
+        - CodeChef
+        - Other or not platform-specific
     validations:
       required: true
   - type: textarea
-    id: use_case
+    id: command
     attributes:
-      label: Reusable use case
-      description: Explain why this belongs in the package rather than one website wrapper.
+      label: Current command or workflow
+      description: Show the command you use today, if applicable.
+      placeholder: cp-cli contest list
     validations:
       required: true
   - type: textarea
-    id: api
+    id: actual
     attributes:
-      label: API sketch
-      placeholder: |
-        <FeelableSurface ... />
+      label: Current result
+      description: Describe the current output or limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Desired result
+      description: Describe the concrete output or workflow improvement.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note any existing command, script, or workaround that falls short.
     validations:
       required: false
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Acceptance criteria
-      placeholder: |
-        - Covered by tests.
-        - Does not add a runtime dependency.
-        - Works with reduced motion.
-    validations:
-      required: true

@@ -1,121 +1,77 @@
-# == my standard template for security ==
-name: Security request
-description: Suggest reusable security, privacy, or hardening behaviour.
+name: Security hardening request
+description: Suggest a cp-cli hardening improvement that is safe to discuss publicly.
 title: "[SECURITY]: "
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form for security improvements that are safe to discuss publicly.
+        Use this form only for public hardening ideas.
 
-        Do not include credentials, secrets, exploit code, or details of an
-        unpatched vulnerability. Report those privately through the repository's
-        Security tab.
-
+        Do not report an actual or suspected vulnerability here. Follow the
+        [security policy](https://github.com/keys-i/cp-cli/security/policy)
+        to report it privately. Do not include credentials, sessions, cookies,
+        exploit details, or private data.
   - type: input
     id: summary
     attributes:
       label: Summary
-      description: Briefly describe the proposed security improvement.
-      placeholder: Add an opt-in Content Security Policy integration.
+      placeholder: Harden validation for a public command argument
     validations:
       required: true
-
+  - type: input
+    id: version
+    attributes:
+      label: cp-cli version
+      description: Include `cp-cli --version` or the commit you built.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS and terminal
+      placeholder: Windows 11, PowerShell 7.5
+    validations:
+      required: true
   - type: dropdown
-    id: category
+    id: platform
     attributes:
-      label: Security area
-      description: Which area does this request primarily affect?
+      label: Platform
       options:
-        - Authentication and authorisation
-        - Input validation and sanitisation
-        - Data protection and privacy
-        - Secure defaults and configuration
-        - Dependency and supply-chain security
-        - Abuse prevention and rate limiting
-        - Logging and sensitive-data handling
-        - Other
+        - LeetCode
+        - HackerRank
+        - Codeforces
+        - Exercism
+        - Project Euler
+        - HackerEarth
+        - CodeChef
+        - Other or not platform-specific
     validations:
       required: true
-
   - type: textarea
-    id: threat_model
+    id: command
     attributes:
-      label: Threat model
-      description: Describe the risk, affected assets, attacker capabilities, and relevant trust boundaries.
-      placeholder: |
-        An application may render untrusted content supplied by...
-        The behaviour should protect...
-        An attacker is assumed to be able to...
+      label: Relevant command or workflow
+      description: Include a safe, redacted example if there is one.
     validations:
       required: true
-
   - type: textarea
-    id: use_case
+    id: actual
     attributes:
-      label: Reusable use case
-      description: Explain why this belongs in the package rather than one application or website wrapper.
-      placeholder: |
-        Multiple consumers need the same protection because...
-        Implementing this independently would make it easier to...
+      label: Current public-facing result
+      description: Describe the current safe-to-disclose behaviour or limitation.
     validations:
       required: true
-
   - type: textarea
-    id: proposed_behaviour
+    id: expected
     attributes:
-      label: Proposed behaviour
-      description: Explain the expected secure behaviour, including defaults and failure handling.
-      placeholder: |
-        The package should enable...
-        The default should be...
-        Invalid or unsafe input should...
+      label: Desired hardening result
+      description: State the public-facing outcome without vulnerability details.
     validations:
       required: true
-
-  - type: textarea
-    id: api
-    attributes:
-      label: API sketch
-      description: Show how consumers might configure or use the behaviour.
-      placeholder: |
-        <SecureSurface
-          policy="strict"
-          onViolation={handleViolation}
-        />
-    validations:
-      required: false
-
-  - type: textarea
-    id: compatibility
-    attributes:
-      label: Compatibility and migration
-      description: Describe any breaking changes, browser or runtime constraints, and migration requirements.
-      placeholder: |
-        Existing consumers should continue to...
-        Enabling strict mode may require...
-    validations:
-      required: false
-
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Acceptance criteria
-      placeholder: |
-        - Covered by unit and integration tests.
-        - Secure by default.
-        - Fails closed where appropriate.
-        - Does not expose secrets through logs or errors.
-        - Does not add a runtime dependency without justification.
-        - Documents the threat model and configuration.
-        - Includes migration guidance for affected consumers.
-    validations:
-      required: true
-
   - type: checkboxes
-    id: public_disclosure
+    id: public_only
     attributes:
       label: Public disclosure confirmation
       options:
-        - label: This request is safe to discuss publicly and does not disclose an unpatched vulnerability, credential, secret, or working exploit.
+        - label: This is a public hardening request, not an actual or suspected vulnerability.
           required: true

@@ -1,66 +1,62 @@
 name: Bug report
-description: Poke model, material, R3F component, accessibility, or package bug.
+description: Report reproducible cp-cli behaviour.
 title: "[BUG]: "
 body:
   - type: input
     id: summary
     attributes:
-      label: Summary line
-      description: One sentence describing the bug.
-      placeholder: Glass smudges do not fade after pointer release.
+      label: Summary
+      placeholder: problem list exits with an error on Codeforces
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Package version or commit
-      placeholder: 0.2.0 or commit SHA
+      label: cp-cli version
+      description: Include `cp-cli --version` or the commit you built.
     validations:
       required: true
   - type: input
-    id: runtime
+    id: environment
     attributes:
-      label: Runtime
-      placeholder: React 19, Three 0.177, R3F 9, Chrome, Safari
+      label: OS and terminal
+      placeholder: macOS 15.0, Apple Terminal 2.14
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - LeetCode
+        - HackerRank
+        - Codeforces
+        - Exercism
+        - Project Euler
+        - HackerEarth
+        - CodeChef
+        - Other or not platform-specific
     validations:
       required: true
   - type: textarea
-    id: happened
+    id: command
     attributes:
-      label: What happened
-      placeholder: Describe the visible failure or build error.
+      label: Command and steps
+      description: Include the exact command and the smallest reproduction steps. Remove secrets and session data.
+      placeholder: |
+        cp-cli --platform codeforces problem list
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behaviour
-      placeholder: What should have happened instead?
+      label: Expected result
     validations:
       required: true
   - type: textarea
-    id: steps
+    id: actual
     attributes:
-      label: Steps to reproduce
-      placeholder: |
-        1. Render FeelableMaterialCard with material="glass".
-        2. Press and release at UV ...
-        3. See the issue.
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs
-      description: Link a short log if it helps. Do not upload credentials, paid assets, private keys, screenshots with secrets, or huge binaries.
-    validations:
-      required: false
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Acceptance Criteria
-      placeholder: |
-        - Fix is covered by a focused test.
-        - No React state is introduced in fast pointer/frame loops.
+      label: Actual result
+      description: Include a short redacted error or output when useful.
     validations:
       required: true

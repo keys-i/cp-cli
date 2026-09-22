@@ -1,6 +1,6 @@
 [package]
 name = "cp-cli-platform-hackerearth"
-version = "3.1.9"
+version = "3.1.10"
 description = "HackerEarth HTTP client used by cp-cli"
 readme = "README.md"
 homepage = "https://github.com/keys-i/cp-cli"

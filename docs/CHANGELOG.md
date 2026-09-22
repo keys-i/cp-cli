@@ -69,3 +69,4 @@ Minor versions follow the project's decimal sequence, so `0.9.0` precedes `1.0.0
 | `3.1.7` | Added native Windows installer coverage |
 | `3.1.8` | Unified repository governance, tooling layout, and canonical release URLs |
 | `3.1.9` | Added packaged documentation and resumable crates.io publishing |
+| `3.1.10` | Replaced the retrospective backfill with one canonical release |

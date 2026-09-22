@@ -603,7 +603,7 @@ dependencies = [
 
 [[package]]
 name = "cp-cli"
-version = "3.1.9"
+version = "3.1.10"
 dependencies = [
  "anstream",
  "anstyle",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "cp-cli-platform-codechef"
-version = "3.1.9"
+version = "3.1.10"
 dependencies = [
  "reqwest",
  "serde",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "cp-cli-platform-codeforces"
-version = "3.1.9"
+version = "3.1.10"
 dependencies = [
  "getrandom 0.4.3",
  "reqwest",
@@ -661,7 +661,7 @@ dependencies = [
 
 [[package]]
 name = "cp-cli-platform-hackerearth"
-version = "3.1.9"
+version = "3.1.10"
 dependencies = [
  "reqwest",
  "serde",
@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "cp-cli-platform-hackerrank"
-version = "3.1.9"
+version = "3.1.10"
 dependencies = [
  "reqwest",
  "serde",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "cp-cli-platform-leetcode"
-version = "3.1.9"
+version = "3.1.10"
 dependencies = [
  "reqwest",
  "serde",
@@ -694,7 +694,7 @@ dependencies = [
 
 [[package]]
 name = "cp-cli-platform-project-euler"
-version = "3.1.9"
+version = "3.1.10"
 dependencies = [
  "reqwest",
  "thiserror 2.0.20",

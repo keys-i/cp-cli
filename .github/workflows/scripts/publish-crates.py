@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import email.utils
 import json
 import os
@@ -26,19 +27,29 @@ PLATFORM_PACKAGES = (
     ("cp-cli-platform-leetcode", "platforms/leetcode/Cargo.toml"),
     ("cp-cli-platform-project-euler", "platforms/project-euler/Cargo.toml"),
 )
-INCOMPLETE_3_1_8_PACKAGES = (
-    "cp-cli-platform-codechef",
-    "cp-cli-platform-codeforces",
-    "cp-cli-platform-hackerearth",
-    "cp-cli-platform-hackerrank",
-    "cp-cli-platform-leetcode",
-)
-VERSION_ROW = re.compile(r"^\| `([0-9]+\.[0-9]+\.[0-9]+)` \|")
+NUMERIC_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 RETRY_AT = re.compile(r"try again after (.+? GMT)(?:\s|$)", re.IGNORECASE)
+RATE_LIMITED = re.compile(
+    r"(?:\b(?:status|http)\s+429\b|too many requests)", re.IGNORECASE
+)
+VERSION_QUOTA = re.compile(
+    r"too many versions of this crate in the last 24 hours", re.IGNORECASE
+)
+VERSION_QUOTA_LIMIT = 20
+VERSION_QUOTA_WINDOW_SECONDS = 86_400
+DEFAULT_MAX_WAIT_SECONDS = VERSION_QUOTA_WINDOW_SECONDS + 10
 
 
 class ReleaseError(RuntimeError):
     pass
+
+
+class PublicationDeferred(ReleaseError):
+    def __init__(self, package: str, version: str, delay: int) -> None:
+        self.package = package
+        self.version = version
+        self.delay = delay
+        super().__init__(f"{package} {version} is deferred for {delay}s")
 
 
 def package_version(manifest: Path) -> str:
@@ -54,56 +65,20 @@ def package_version(manifest: Path) -> str:
     raise ReleaseError(f"could not read a package version from {manifest}")
 
 
-def changelog_versions(changelog: Path, current: str) -> list[str]:
-    versions = [
-        match.group(1)
-        for line in changelog.read_text(encoding="utf-8").splitlines()
-        if (match := VERSION_ROW.match(line))
-    ]
-    if not versions or versions[0] != "0.1.0" or versions[-1] != current:
-        raise ReleaseError(
-            f"{changelog} must list 0.1.0 through {current} in publish order"
-        )
-    if len(versions) != len(set(versions)):
-        raise ReleaseError(f"{changelog} contains duplicate versions")
-    if versions != sorted(versions, key=lambda value: tuple(map(int, value.split(".")))):
-        raise ReleaseError(f"{changelog} versions are not in ascending order")
-    return versions
+def version_key(value: str) -> tuple[int, ...]:
+    return tuple(map(int, value.split(".")))
 
 
-def replace_manifest_version(text: str, version: str) -> str:
-    lines = text.splitlines(keepends=True)
-    in_package = False
-    for index, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped == "[package]":
-            in_package = True
-            continue
-        if stripped.startswith("["):
-            in_package = False
-        if in_package and stripped.startswith("version = "):
-            suffix = "\n" if line.endswith("\n") else ""
-            lines[index] = f'version = "{version}"{suffix}'
-            return "".join(lines)
-    raise ReleaseError("root manifest has no package version")
-
-
-def replace_lock_version(text: str, version: str) -> str:
-    lines = text.splitlines(keepends=True)
-    in_root_package = False
-    for index, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped == "[[package]]":
-            in_root_package = False
-            continue
-        if stripped == 'name = "cp-cli"':
-            in_root_package = True
-            continue
-        if in_root_package and stripped.startswith("version = "):
-            suffix = "\n" if line.endswith("\n") else ""
-            lines[index] = f'version = "{version}"{suffix}'
-            return "".join(lines)
-    raise ReleaseError("lockfile has no cp-cli package version")
+def older_versions(versions: set[str], current: str) -> list[str]:
+    current_key = version_key(current)
+    return sorted(
+        (
+            version
+            for version in versions
+            if NUMERIC_VERSION.fullmatch(version) and version_key(version) < current_key
+        ),
+        key=version_key,
+    )
 
 
 def prepare_workspace(destination: Path) -> None:
@@ -134,6 +109,7 @@ def retry_delay(
     retry_after: str | None = None,
 ) -> int:
     current = time.time() if now is None else now
+    fallback = int(os.environ.get("CP_CLI_PUBLISH_RETRY_SECONDS", "60"))
     if retry_after:
         if retry_after.isdigit():
             return max(5, int(retry_after) + 1)
@@ -144,9 +120,42 @@ def retry_delay(
             pass
     match = RETRY_AT.search(message)
     if not match:
-        return int(os.environ.get("CP_CLI_PUBLISH_RETRY_SECONDS", "60"))
-    retry_at = email.utils.parsedate_to_datetime(match.group(1)).timestamp()
+        return fallback
+    try:
+        retry_at = email.utils.parsedate_to_datetime(match.group(1)).timestamp()
+    except (TypeError, ValueError, OverflowError):
+        return fallback
     return max(5, int(retry_at - current) + 5)
+
+
+def is_rate_limited(message: str) -> bool:
+    return RATE_LIMITED.search(message) is not None
+
+
+def version_quota_delay(created_at: list[str], now: float | None = None) -> int:
+    current = time.time() if now is None else now
+    timestamps: list[float] = []
+    for value in created_at:
+        try:
+            published_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if published_at.tzinfo is None:
+                raise ValueError("publication timestamp has no timezone")
+            timestamps.append(published_at.timestamp())
+        except (AttributeError, TypeError, ValueError) as error:
+            raise ReleaseError("crates.io returned an invalid publication timestamp") from error
+    recent = sorted(
+        timestamp
+        for timestamp in timestamps
+        if timestamp > current - VERSION_QUOTA_WINDOW_SECONDS
+    )
+    if len(recent) < VERSION_QUOTA_LIMIT:
+        raise ReleaseError(
+            "crates.io reported a 24-hour version quota without 20 recent releases"
+        )
+    reopens_at = (
+        recent[len(recent) - VERSION_QUOTA_LIMIT] + VERSION_QUOTA_WINDOW_SECONDS
+    )
+    return max(5, int(reopens_at - current) + 6)
 
 
 class Registry:
@@ -158,7 +167,11 @@ class Registry:
 
     def request(self, url: str, missing_ok: bool) -> bytes | None:
         max_attempts = int(os.environ.get("CP_CLI_PUBLISH_MAX_ATTEMPTS", "8"))
-        max_wait = int(os.environ.get("CP_CLI_PUBLISH_MAX_WAIT_SECONDS", "3600"))
+        max_wait = int(
+            os.environ.get(
+                "CP_CLI_PUBLISH_MAX_WAIT_SECONDS", DEFAULT_MAX_WAIT_SECONDS
+            )
+        )
         for attempt in range(1, max_attempts + 1):
             request = Request(url, headers={"User-Agent": self.user_agent})
             try:
@@ -212,6 +225,23 @@ class Registry:
             is not None
         )
 
+    def version_quota_delay(self, crate: str) -> int:
+        content = self.request(
+            f"https://crates.io/api/v1/crates/{crate}/versions?per_page=100",
+            missing_ok=False,
+        )
+        if content is None:
+            raise ReleaseError(f"crates.io returned no versions for {crate}")
+        try:
+            payload = json.loads(content)
+            versions = payload["versions"]
+            created_at = [version["created_at"] for version in versions]
+        except (KeyError, TypeError, json.JSONDecodeError) as error:
+            raise ReleaseError(
+                f"crates.io returned invalid version metadata for {crate}"
+            ) from error
+        return version_quota_delay(created_at)
+
     def wait_until_indexed(self, crate: str, version: str) -> None:
         timeout = int(os.environ.get("CP_CLI_INDEX_WAIT_SECONDS", "300"))
         deadline = time.monotonic() + timeout
@@ -230,6 +260,7 @@ def run_cargo(command: list[str], cwd: Path) -> tuple[int, str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        errors="replace",
     )
     output: list[str] = []
     if process.stdout is None:
@@ -264,7 +295,9 @@ def publish_package(
         command.append("--dry-run")
 
     max_attempts = int(os.environ.get("CP_CLI_PUBLISH_MAX_ATTEMPTS", "8"))
-    max_wait = int(os.environ.get("CP_CLI_PUBLISH_MAX_WAIT_SECONDS", "3600"))
+    max_wait = int(
+        os.environ.get("CP_CLI_PUBLISH_MAX_WAIT_SECONDS", DEFAULT_MAX_WAIT_SECONDS)
+    )
     for attempt in range(1, max_attempts + 1):
         print(f"Publishing {package} {version} ({attempt}/{max_attempts})")
         return_code, output = run_cargo(command, workspace)
@@ -276,16 +309,56 @@ def publish_package(
             registry.versions(package).add(version)
             print(f"{package} {version} reached crates.io despite Cargo's local error")
             return
-        if "429 Too Many Requests" not in output:
+        if VERSION_QUOTA.search(output):
+            delay = registry.version_quota_delay(package)
+            if delay > max_wait:
+                raise ReleaseError(
+                    f"crates.io asked to wait {delay}s, above the {max_wait}s safety limit"
+                )
+            raise PublicationDeferred(package, version, delay)
+        elif is_rate_limited(output):
+            delay = retry_delay(output)
+            print(f"crates.io rate limit reached; retrying in {delay}s", flush=True)
+        else:
             raise ReleaseError(f"cargo publish failed for {package} {version}")
-        delay = retry_delay(output)
         if delay > max_wait:
             raise ReleaseError(
                 f"crates.io asked to wait {delay}s, above the {max_wait}s safety limit"
             )
-        print(f"crates.io rate limit reached; retrying in {delay}s")
         time.sleep(delay)
     raise ReleaseError(f"cargo publish kept rate-limiting {package} {version}")
+
+
+def publish_queue(
+    registry: Registry,
+    workspace: Path,
+    releases: list[tuple[str, str]],
+    dry_run: bool,
+    *,
+    publish=publish_package,
+    wait=time.sleep,
+) -> None:
+    pending = releases
+    while pending:
+        deferred: list[PublicationDeferred] = []
+        for package, version in pending:
+            try:
+                publish(registry, workspace, package, version, dry_run)
+            except PublicationDeferred as error:
+                retry_at = time.strftime(
+                    "%Y-%m-%d %H:%M:%S UTC",
+                    time.gmtime(time.time() + error.delay),
+                )
+                print(
+                    f"{error.package} {error.version} deferred until {retry_at}",
+                    flush=True,
+                )
+                deferred.append(error)
+        if not deferred:
+            return
+        delay = min(error.delay for error in deferred)
+        wait(delay)
+        pending = [(error.package, error.version) for error in deferred]
 
 
 def yank_package(workspace: Path, package: str, version: str, dry_run: bool) -> None:
@@ -294,13 +367,15 @@ def yank_package(workspace: Path, package: str, version: str, dry_run: bool) -> 
         return
     command = ["cargo", "yank", package, "--version", version]
     max_attempts = int(os.environ.get("CP_CLI_PUBLISH_MAX_ATTEMPTS", "8"))
-    max_wait = int(os.environ.get("CP_CLI_PUBLISH_MAX_WAIT_SECONDS", "3600"))
+    max_wait = int(
+        os.environ.get("CP_CLI_PUBLISH_MAX_WAIT_SECONDS", DEFAULT_MAX_WAIT_SECONDS)
+    )
     for attempt in range(1, max_attempts + 1):
         print(f"Yanking {package} {version} ({attempt}/{max_attempts})")
         return_code, output = run_cargo(command, workspace)
         if return_code == 0 or "already yanked" in output.lower():
             return
-        if "429 Too Many Requests" not in output:
+        if not is_rate_limited(output):
             raise ReleaseError(f"cargo yank failed for {package} {version}")
         delay = retry_delay(output)
         if delay > max_wait:
@@ -312,31 +387,11 @@ def yank_package(workspace: Path, package: str, version: str, dry_run: bool) -> 
     raise ReleaseError(f"cargo yank kept rate-limiting {package} {version}")
 
 
-def set_root_version(
-    workspace: Path,
-    manifest: str,
-    lockfile: str,
-    readme: str,
-    current: str,
-    version: str,
-) -> None:
-    (workspace / "Cargo.toml").write_text(
-        replace_manifest_version(manifest, version), encoding="utf-8"
-    )
-    (workspace / "Cargo.lock").write_text(
-        replace_lock_version(lockfile, version), encoding="utf-8"
-    )
-    (workspace / "README.md").write_text(
-        readme.replace(current, version), encoding="utf-8"
-    )
-
-
 def self_test() -> None:
-    manifest = '[package]\nname = "cp-cli"\nversion = "3.1.8"\n\n[workspace]\n'
-    lockfile = '[[package]]\nname = "cp-cli"\nversion = "3.1.8"\n'
-    assert 'version = "0.1.0"' in replace_manifest_version(manifest, "0.1.0")
-    assert 'version = "0.1.0"' in replace_lock_version(lockfile, "0.1.0")
     assert sparse_index_path("cp-cli") == "cp/-c/cp-cli"
+    assert older_versions(
+        {"3.1.10", "3.1.9", "0.9.2", "4.0.0", "preview"}, "3.1.10"
+    ) == ["0.9.2", "3.1.9"]
     timestamp = email.utils.parsedate_to_datetime(
         "Tue, 22 Sep 2026 22:10:29 GMT"
     ).timestamp()
@@ -345,29 +400,53 @@ def self_test() -> None:
         now=timestamp - 20,
     ) == 25
     assert retry_delay("", retry_after="12") == 13
+    assert retry_delay("try again after invalid GMT") == int(
+        os.environ.get("CP_CLI_PUBLISH_RETRY_SECONDS", "60")
+    )
+    assert is_rate_limited("the remote server responded with status 429")
+    assert is_rate_limited("HTTP 429 Too Many Requests")
+    assert not is_rate_limited("HTTP 422 Unprocessable Entity")
+    assert VERSION_QUOTA.search(
+        "You have published too many versions of this crate in the last 24 hours"
+    )
+    quota_now = datetime.fromisoformat("2026-09-23T00:00:00+00:00").timestamp()
+    recent = [
+        datetime.fromtimestamp(quota_now - 60 * index, tz=timezone.utc).isoformat()
+        for index in range(VERSION_QUOTA_LIMIT)
+    ]
+    assert version_quota_delay(recent, now=quota_now) == 85_266
+    for invalid in (["not-a-date"] * VERSION_QUOTA_LIMIT, recent[:-1]):
+        try:
+            version_quota_delay(invalid, now=quota_now)
+        except ReleaseError:
+            pass
+        else:
+            raise AssertionError("invalid quota metadata was accepted")
+
+    attempts: list[str] = []
+    waits: list[int] = []
+
+    def deferred_once(_registry, _workspace, package, version, _dry_run):
+        attempts.append(package)
+        if package == "first" and attempts.count(package) == 1:
+            raise PublicationDeferred(package, version, 5)
+
+    publish_queue(
+        None,
+        Path(),
+        [("first", "3.1.10"), ("second", "3.1.10")],
+        False,
+        publish=deferred_once,
+        wait=waits.append,
+    )
+    assert attempts == ["first", "second", "first"]
+    assert waits == [5]
+
     current = package_version(ROOT / "Cargo.toml")
-    versions = changelog_versions(ROOT / "docs/CHANGELOG.md", current)
-    assert versions[0] == "0.1.0"
-    assert versions[-1] == current
     with tempfile.TemporaryDirectory(prefix="cp-cli-publish-test-") as temporary:
         workspace = Path(temporary)
         prepare_workspace(workspace)
-        manifest_text = (workspace / "Cargo.toml").read_text(encoding="utf-8")
-        lock_text = (workspace / "Cargo.lock").read_text(encoding="utf-8")
-        readme_text = (workspace / "README.md").read_text(encoding="utf-8")
-        for version in versions:
-            set_root_version(
-                workspace,
-                manifest_text,
-                lock_text,
-                readme_text,
-                current,
-                version,
-            )
-            assert package_version(workspace / "Cargo.toml") == version
-            assert f'name = "cp-cli"\nversion = "{version}"' in (
-                workspace / "Cargo.lock"
-            ).read_text(encoding="utf-8")
+        assert package_version(workspace / "Cargo.toml") == current
         for _package, manifest_path in PLATFORM_PACKAGES:
             platform = workspace / Path(manifest_path).parent
             assert (platform / "README.md").is_file()
@@ -382,20 +461,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Publish cp-cli crates in dependency order with resumable rate-limit handling"
     )
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--version", help="publish the checked-in release version")
-    mode.add_argument(
-        "--history",
-        action="store_true",
-        help="publish cp-cli versions from the changelog after current platform crates",
-    )
+    parser.add_argument("--version", help="publish the checked-in release version")
     parser.add_argument(
         "--dry-run", action="store_true", help="run Cargo's checks without uploading"
     )
     parser.add_argument(
-        "--yank-incomplete-3-1-8",
+        "--yank-all",
         action="store_true",
-        help="yank the five platform archives published before READMEs were added",
+        help="replace prior releases by publishing current, then yanking every lower version",
     )
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
@@ -406,46 +479,38 @@ def main() -> int:
     if args.self_test:
         self_test()
         return 0
-    if args.yank_incomplete_3_1_8 and not args.history:
-        raise ReleaseError("--yank-incomplete-3-1-8 requires --history")
 
     current = package_version(ROOT / "Cargo.toml")
     if args.version and args.version != current:
         raise ReleaseError(
             f"requested version {args.version} does not match workspace version {current}"
         )
-    versions = (
-        changelog_versions(ROOT / "docs/CHANGELOG.md", current)
-        if args.history
-        else [current]
-    )
     registry = Registry(current)
 
     with tempfile.TemporaryDirectory(prefix="cp-cli-publish-") as temporary:
         workspace = Path(temporary)
         prepare_workspace(workspace)
-        manifest = (workspace / "Cargo.toml").read_text(encoding="utf-8")
-        lockfile = (workspace / "Cargo.lock").read_text(encoding="utf-8")
-        readme = (workspace / "README.md").read_text(encoding="utf-8")
 
-        for package, _manifest in PLATFORM_PACKAGES:
-            publish_package(registry, workspace, package, current, args.dry_run)
+        platform_releases = [
+            (package, current) for package, _manifest in PLATFORM_PACKAGES
+        ]
+        publish_queue(registry, workspace, platform_releases, args.dry_run)
         if not args.dry_run:
             for package, _manifest in PLATFORM_PACKAGES:
                 registry.wait_until_indexed(package, current)
-        for version in versions:
-            set_root_version(
-                workspace, manifest, lockfile, readme, current, version
-            )
-            publish_package(registry, workspace, "cp-cli", version, args.dry_run)
-        if args.yank_incomplete_3_1_8:
-            for package in INCOMPLETE_3_1_8_PACKAGES:
-                if args.dry_run or "3.1.8" in registry.versions(
-                    package, refresh=True
+        publish_queue(
+            registry, workspace, [("cp-cli", current)], args.dry_run
+        )
+        if args.yank_all:
+            if not args.dry_run:
+                registry.wait_until_indexed("cp-cli", current)
+            packages = [package for package, _manifest in PLATFORM_PACKAGES]
+            packages.append("cp-cli")
+            for package in packages:
+                for version in older_versions(
+                    registry.versions(package, refresh=True), current
                 ):
-                    yank_package(workspace, package, "3.1.8", args.dry_run)
-                else:
-                    print(f"{package} 3.1.8 was never published; nothing to yank")
+                    yank_package(workspace, package, version, args.dry_run)
     return 0
 
 
